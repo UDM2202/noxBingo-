@@ -89,6 +89,7 @@ function Lobby() {
   style={{
     position: 'relative',
     padding: '4px 8px',
+    margin: '8px',
     fontSize: '18px',
     fontWeight: 600,
     letterSpacing: '0.1em',

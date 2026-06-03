@@ -18,17 +18,14 @@ function GameRoom() {
   const [victoryPhase, setVictoryPhase] = useState<'winning-cell' | 'card-scale' | 'caller-freeze' | 'overlay' | null>(null);
   const victoryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Start the draw loop
   useDrawLoop(state.phase, state.currentDrawIndex, state.drawSequence.length, dispatch);
 
-  // Initialize room on mount
   useEffect(() => {
     if (roomCode === 'new') {
       dispatch({ type: 'START_COUNTDOWN' });
     }
   }, [roomCode, dispatch]);
 
-  // Countdown logic
   useEffect(() => {
     if (state.phase === 'countdown' && state.countdownValue > 0) {
       const timer = setTimeout(() => {
@@ -42,7 +39,6 @@ function GameRoom() {
     }
   }, [state.phase, state.countdownValue, deployCards, dispatch]);
 
-  // Victory choreography
   useEffect(() => {
     if (state.winningCardIndex !== null && state.phase === 'finished' && !showVictory) {
       setVictoryPhase('winning-cell');
@@ -86,15 +82,13 @@ function GameRoom() {
   const isNearMiss = state.nearMissStates.some(count => count === 1);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Countdown overlay */}
+    <div className="h-full flex flex-col overflow-hidden">
       <AnimatePresence>
         {state.phase === 'countdown' && (
           <CountdownOverlay value={state.countdownValue} />
         )}
       </AnimatePresence>
 
-      {/* Header */}
       <HeaderBar
         roomCode={state.roomCode || roomCode || '------'}
         ballsDrawn={state.currentDrawIndex + 1}
@@ -104,10 +98,8 @@ function GameRoom() {
         onBackToLobby={handleBackToLobby}
       />
 
-       {/* Main game area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 pb-6" style={{ paddingTop: '40px' }}>
-        
-        {/* Caller + Drawn Sequence */}
+      {/* Scrollable game area — fits caller + cards without cutoff */}
+<div className="flex-1 overflow-y-auto px-4 pb-4" style={{ paddingTop: '12px' }}>
         {(state.phase === 'playing' || state.phase === 'finished') && (
           <motion.div
             className="flex flex-col items-center w-full"
@@ -115,8 +107,8 @@ function GameRoom() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
           >
-            {/* Quantum Caller */}
-            <div style={{ marginBottom: '48px' }}>
+            {/* Quantum Caller — tighter margin */}
+            <div style={{ marginBottom: '28px' }}>
               <QuantumCaller
                 currentBall={currentBall}
                 isDrawing={state.phase === 'playing'}
@@ -125,33 +117,33 @@ function GameRoom() {
               />
             </div>
 
-            {/* Drawn Sequence */}
+            {/* Drawn Sequence — tighter margin */}
             {drawnBalls.length > 0 && (
-              <div style={{ marginBottom: '32px' }}>
+              <div style={{ marginBottom: '24px' }}>
                 <DrawnSequence balls={drawnBalls} />
               </div>
             )}
           </motion.div>
         )}
 
-        {/* Cards Grid — centered */}
+        {/* Cards Grid */}
         {(state.phase === 'playing' || state.phase === 'finished') && (
           <motion.div
-            className="flex justify-center gap-7 mt-10 px-4 flex-wrap w-full"
+            className="flex justify-center gap-5 px-2 flex-wrap w-full"
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
           >
             {state.cards.map((card, index) => (
               <HoloCard
-  key={card.id}
-  card={card}
-  cardIndex={index}
-  drawnNumbers={state.drawnNumbers}
-  currentBall={currentBall}
-  isWinning={state.winningCardIndex === index}
-  victoryPhase={victoryPhase}
-  onCellClick={(row, col) => {
+                key={card.id}
+                card={card}
+                cardIndex={index}
+                drawnNumbers={state.drawnNumbers}
+                currentBall={currentBall}
+                isWinning={state.winningCardIndex === index}
+                victoryPhase={victoryPhase}
+                onCellClick={(row, col) => {
                   if (state.phase === 'playing') {
                     dispatch({ type: 'MARK_CELL', cardIndex: index, row, col });
                   }
@@ -161,9 +153,8 @@ function GameRoom() {
           </motion.div>
         )}
 
-        {/* Deploying spinner */}
         {state.phase === 'countdown' && state.countdownValue === 0 && (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center min-h-[300px]">
             <motion.div
               className="text-center"
               initial={{ opacity: 0 }}
@@ -178,7 +169,6 @@ function GameRoom() {
         )}
       </div>
 
-      {/* Victory Overlay */}
       <AnimatePresence>
         {showVictory && state.winningCardIndex !== null && (
           <VictoryOverlay
@@ -189,7 +179,6 @@ function GameRoom() {
         )}
       </AnimatePresence>
 
-      {/* Near-miss ambient effect */}
       {isNearMiss && state.phase === 'playing' && (
         <motion.div
           className="fixed inset-0 pointer-events-none z-0"

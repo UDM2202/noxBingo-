@@ -67,6 +67,10 @@
   box-sizing: border-box;
 }
 
+html {
+  zoom: 80%;
+}
+
 body {
   background-color: var(--color-midnight-deep);
   color: white;
