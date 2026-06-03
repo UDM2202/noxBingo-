@@ -30,7 +30,7 @@ function AnimatedBackground() {
     function generateStars(width: number, height: number): Star[] {
       const starCount = isMobile ? 80 : 200;
       const stars: Star[] = [];
-      const twinklePercent = 0.1; // Only 10% twinkle
+      const twinklePercent = 0.1;
 
       for (let i = 0; i < starCount; i++) {
         const isTwinkling = Math.random() < twinklePercent;
@@ -55,10 +55,9 @@ function AnimatedBackground() {
       const offCtx = offscreen.getContext('2d', { alpha: true, willReadFrequently: false });
       if (!offCtx) return null;
 
-      // Draw static stars (non-twinkling)
       offCtx.clearRect(0, 0, width, height);
       stars.forEach(star => {
-        if (star.isTwinkling) return; // Skip twinkling — they go on main canvas
+        if (star.isTwinkling) return;
         offCtx.beginPath();
         offCtx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
         offCtx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`;
@@ -85,11 +84,12 @@ function AnimatedBackground() {
     }
 
     function draw(timestamp: number) {
-  const currentCanvas = canvasRef.current;
-  if (!ctx || !currentCanvas) return;
+      const currentCanvas = canvasRef.current;
+      if (!ctx || !currentCanvas) return;
 
-  const { width, height } = dimensionsRef.current;
-  ctx.clearRect(0, 0, width, height);
+      const { width, height } = dimensionsRef.current;
+      ctx.clearRect(0, 0, width, height);
+
       // Draw static star field from offscreen canvas
       if (offscreenRef.current) {
         ctx.drawImage(offscreenRef.current, 0, 0);
@@ -103,7 +103,6 @@ function AnimatedBackground() {
         const twinkleValue = Math.sin(timestamp * star.twinkleSpeed + star.twinkleOffset);
         const currentOpacity = star.opacity * (0.4 + 0.6 * ((twinkleValue + 1) / 2));
 
-        // Only draw if opacity changed meaningfully
         if (Math.abs(twinkleValue) > 0.01 || timestamp < 100) {
           anyTwinklingChanged = true;
         }
@@ -113,7 +112,6 @@ function AnimatedBackground() {
         ctx.fillStyle = `rgba(255, 255, 255, ${currentOpacity})`;
         ctx.fill();
 
-        // Add subtle glow to twinkling stars
         if (currentOpacity > 0.5) {
           ctx.beginPath();
           ctx.arc(star.x, star.y, star.radius * 2.5, 0, Math.PI * 2);
@@ -122,11 +120,9 @@ function AnimatedBackground() {
         }
       });
 
-      // Always run on first frame, then only if twinkling changed
       if (timestamp < 100 || anyTwinklingChanged) {
         rafRef.current = requestAnimationFrame(draw);
       } else {
-        // Slow polling when nothing is twinkling
         setTimeout(() => {
           rafRef.current = requestAnimationFrame(draw);
         }, 500);
