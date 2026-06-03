@@ -24,7 +24,6 @@ function AnimatedBackground() {
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
-    // Detect mobile for performance
     const isMobile = window.innerWidth < 768;
 
     function generateStars(width: number, height: number): Star[] {
@@ -68,6 +67,9 @@ function AnimatedBackground() {
     }
 
     function resize() {
+      const currentCanvas = canvasRef.current;
+      if (!currentCanvas) return;
+
       const width = window.innerWidth;
       const height = window.innerHeight;
 
@@ -76,8 +78,8 @@ function AnimatedBackground() {
       }
 
       dimensionsRef.current = { width, height };
-      canvas.width = width;
-      canvas.height = height;
+      currentCanvas.width = width;
+      currentCanvas.height = height;
 
       starsRef.current = generateStars(width, height);
       offscreenRef.current = createOffscreenCanvas(width, height, starsRef.current);
@@ -90,12 +92,10 @@ function AnimatedBackground() {
       const { width, height } = dimensionsRef.current;
       ctx.clearRect(0, 0, width, height);
 
-      // Draw static star field from offscreen canvas
       if (offscreenRef.current) {
         ctx.drawImage(offscreenRef.current, 0, 0);
       }
 
-      // Draw twinkling stars with animation
       const twinklingStars = starsRef.current.filter(s => s.isTwinkling);
       let anyTwinklingChanged = false;
 
