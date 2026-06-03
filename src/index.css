@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme {
+  --color-midnight-deep: #0A0F1A;
+  --color-midnight-core: #0F1622;
+  --color-midnight-surface: #1A2335;
+  --color-neon-primary: #00F0FF;
+  --color-neon-glow: #00F0FF80;
+  --color-gold: #FFD700;
+  --color-gold-glow: #FFD70080;
+  --color-success-green: #00FF88;
+  --color-win-highlight: #FFD700;
+  --color-card-bg: #1A2335;
+  --color-cell-unmarked: #0F1622;
+  --color-cell-marked: #00F0FF33;
+  --color-cell-free: #FFD70022;
+  
+  --font-heading: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-body: 'Inter', system-ui, sans-serif;
+  
+  --animate-twinkle: twinkle 3s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  --animate-slide-up: slide-up 0.5s ease-out;
+  --animate-bounce-in: bounce-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --animate-victory-bounce: victory-bounce 0.8s ease-out;
+  --animate-near-miss-pulse: near-miss-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px var(--color-neon-primary); }
+  50% { box-shadow: 0 0 20px var(--color-neon-primary), 0 0 40px var(--color-neon-glow); }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.05); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes victory-bounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+@keyframes near-miss-pulse {
+  0%, 100% { border-color: var(--color-neon-primary); }
+  50% { border-color: var(--color-gold); }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-midnight-deep);
+  color: white;
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Custom scrollbar for the drawn sequence */
+::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-midnight-core);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-neon-glow);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neon-primary);
+}
