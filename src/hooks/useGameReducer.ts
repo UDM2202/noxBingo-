@@ -1,5 +1,5 @@
 import { useReducer, useCallback } from 'react';
-import type { GameState, GameAction, BingoCard } from '../types/game';
+import type { GameState, GameAction } from '../types/game';
 import { generateRoomCode, generateSeed } from '../utils/seededRandom';
 import { generateCards, generateDrawSequence } from '../utils/cardGenerator';
 import { autoDaub, checkForWin, getNearMissCount } from '../utils/gameLogic';

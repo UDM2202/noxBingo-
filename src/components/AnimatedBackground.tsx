@@ -85,11 +85,11 @@ function AnimatedBackground() {
     }
 
     function draw(timestamp: number) {
-      if (!ctx || !canvas) return;
+  const currentCanvas = canvasRef.current;
+  if (!ctx || !currentCanvas) return;
 
-      const { width, height } = dimensionsRef.current;
-      ctx.clearRect(0, 0, width, height);
-
+  const { width, height } = dimensionsRef.current;
+  ctx.clearRect(0, 0, width, height);
       // Draw static star field from offscreen canvas
       if (offscreenRef.current) {
         ctx.drawImage(offscreenRef.current, 0, 0);
