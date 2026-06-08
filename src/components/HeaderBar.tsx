@@ -6,10 +6,12 @@ interface HeaderBarProps {
   totalBalls: number;
   isLive: boolean;
   isNearMiss: boolean;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
   onBackToLobby: () => void;
 }
 
-function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, onBackToLobby }: HeaderBarProps) {
+function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, soundEnabled, onToggleSound, onBackToLobby }: HeaderBarProps) {
   return (
     <motion.header
       className="sticky top-0 z-30 bg-midnight-deep/90 backdrop-blur-xl border-b border-white/5"
@@ -23,7 +25,7 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, onBac
         <div className="flex items-center gap-5">
           <button
             onClick={onBackToLobby}
-            className="group flex items-center gap-2.5 text-gray-400 hover:text-gray-200 transition-all duration-200 cursor-pointer"
+            className="group flex items-center gap-2.5 text-[#5C5C9E] hover:text-[#8B8BD4] transition-all duration-200 cursor-pointer"
           >
             <svg
               width="18"
@@ -46,7 +48,7 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, onBac
           <div className="h-6 w-px bg-white/8" />
 
           <div className="flex items-center gap-3">
-            <span className="text-[10px] tracking-[0.3em] uppercase text-gray-500 font-medium">Room</span>
+            <span className="text-[10px] tracking-[0.3em] uppercase text-[#5C5C9E] font-medium">Room</span>
             <div className="flex gap-1.5">
               {roomCode.split('').map((char, i) => (
                 <motion.span
@@ -65,6 +67,29 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, onBac
 
         {/* Right: Game Status */}
         <div className="flex items-center gap-8 pr-1">
+
+          {/* Sound toggle */}
+          <button
+            onClick={onToggleSound}
+            className="flex items-center gap-1.5 text-[#5C5C9E] hover:text-[#8B8BD4] transition-colors cursor-pointer"
+            title={soundEnabled ? 'Mute sounds' : 'Enable sounds'}
+          >
+            {soundEnabled ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            )}
+          </button>
+
+          <div className="h-6 w-px bg-white/8" />
           
           {/* Live / Standby */}
           <div className="flex items-center gap-2.5">
@@ -80,8 +105,8 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, onBac
               </>
             ) : (
               <>
-                <span className="h-2.5 w-2.5 rounded-full bg-gray-600" />
-                <span className="text-xs text-gray-500 tracking-[0.2em] uppercase font-medium">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#4A4A8A]" />
+                <span className="text-xs text-[#5C5C9E] tracking-[0.2em] uppercase font-medium">
                   Standby
                 </span>
               </>
@@ -92,14 +117,14 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, onBac
 
           {/* Balls Drawn */}
           <div className="flex items-center gap-3">
-            <span className="text-[10px] tracking-[0.3em] uppercase text-gray-500 font-medium">
+            <span className="text-[10px] tracking-[0.3em] uppercase text-[#5C5C9E] font-medium">
               Balls Drawn
             </span>
             <div className="flex items-baseline gap-1">
               <span className="text-2xl font-mono font-bold text-white tabular-nums leading-none">
                 {ballsDrawn}
               </span>
-              <span className="text-sm text-gray-500 font-mono">/ {totalBalls}</span>
+              <span className="text-sm text-[#4A4A8A] font-mono">/ {totalBalls}</span>
             </div>
           </div>
 
@@ -156,11 +181,11 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, onBac
       width: '8px',
       height: '4px',
       borderRadius: '50%',
-      backgroundColor: '#374151',
+      backgroundColor: '#4A4A8A',
     }} />
     <span style={{
       fontSize: '14px',
-      color: '#6b7280',
+      color: '#7B7BBF',
       letterSpacing: '0.1em',
       textTransform: 'uppercase',
       fontWeight: 500,

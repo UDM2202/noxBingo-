@@ -42,7 +42,7 @@ function QuantumCaller({ currentBall, isDrawing, isFrozen, winningCardIndex }: Q
       <motion.div
         className="relative w-40 h-40 md:w-48 md:h-48 rounded-full flex items-center justify-center"
         style={{
-          background: 'radial-gradient(circle at 30% 30%, rgba(0,240,255,0.08), rgba(10,15,26,0.9))',
+          background: 'radial-gradient(circle at 30% 30%, rgba(0,229,255,0.1), rgba(11,11,69,0.9))',background: 'radial-gradient(circle at 30% 30%, rgba(0,240,255,0.08), rgba(10,15,26,0.9))',
           border: '2px solid rgba(0,240,255,0.15)',
         }}
         animate={isFrozen && winningCardIndex !== null ? {

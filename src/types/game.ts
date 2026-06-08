@@ -10,9 +10,11 @@ export interface BingoCell {
 
 export interface BingoCard {
   id: string;
-  grid: BingoCell[][]; // 5x5
+  grid: BingoCell[][];
   status: 'ACTIVE' | 'STANDBY' | 'WON';
   nearMissCount: number;
+  noxCell: { row: number; col: number } | null;
+  noxHit: boolean;
 }
 
 export type GamePhase = 'countdown' | 'playing' | 'finished';
@@ -25,6 +27,7 @@ export interface GameState {
   drawnNumbers: Set<number>;
   cards: BingoCard[];
   winningCardIndex: number | null;
+  bonusWinner: number | null;
   nearMissStates: number[];
   seed: string;
   countdownValue: number;
@@ -37,5 +40,6 @@ export type GameAction =
   | { type: 'DRAW_BALL' }
   | { type: 'MARK_CELL'; cardIndex: number; row: number; col: number }
   | { type: 'DECLARE_WIN'; cardIndex: number }
+  | { type: 'TRIGGER_NOX_BONUS'; cardIndex: number }
   | { type: 'RESET_GAME' }
   | { type: 'UPDATE_NEAR_MISS'; states: number[] };

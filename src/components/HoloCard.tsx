@@ -30,7 +30,7 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
         }
       `}
       style={{
-        background: 'linear-gradient(145deg, rgba(26,35,53,0.9), rgba(15,22,34,0.95))',
+        background: 'linear-gradient(145deg, rgba(26,26,94,0.9), rgba(18,18,77,0.95))',
         padding: '16px',
       }}
       animate={
@@ -79,6 +79,8 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
             const isMarked = cell.marked;
             const isWinningCell = isWinning && victoryPhase === 'winning-cell' && isMarked;
             const isJustCalled = currentBall !== null && cell.value === currentBall;
+            const isNoxCell = card.noxCell?.row === rowIndex && card.noxCell?.col === colIndex;
+            const isNoxHit = isNoxCell && card.noxHit;
 
             return (
               <motion.button
@@ -97,8 +99,8 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                   }
                 `}
                 style={{
-                  width: '52px',
-                  height: '52px',
+                  width: '44px',
+                  height: '44px',
                   padding: 0,
                   margin: 0,
                 }}
@@ -107,9 +109,9 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                   isWinningCell
                     ? {
                         backgroundColor: [
-                          'rgba(0,240,255,0.1)',
+                          'rgba(0,229,255,0.1)',
                           'rgba(255,215,0,0.3)',
-                          'rgba(0,240,255,0.1)',
+                          'rgba(0,229,255,0.1)',
                         ],
                       }
                     : {}
@@ -128,7 +130,7 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                     animate={{ scale: 1 }}
                     transition={{ type: 'spring', stiffness: 400, damping: 15 }}
                   >
-                    FREE
+                    NOX
                   </motion.span>
                 ) : (
                   <motion.span
@@ -141,24 +143,81 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                   </motion.span>
                 )}
 
-                {/* Draw flash — transient glow when ball matches this cell */}
+                {/* Nox cell shimmer — visible before it's hit */}
+                {isNoxCell && !isNoxHit && !isMarked && (
+                  <motion.div
+                    className="absolute inset-0 rounded-lg pointer-events-none"
+                    style={{ border: '1.5px solid rgba(255,215,0,0.35)' }}
+                    animate={{
+                      opacity: [0.3, 0.7, 0.3],
+                      boxShadow: [
+                        '0 0 0px rgba(255,215,0,0)',
+                        '0 0 8px rgba(255,215,0,0.3)',
+                        '0 0 0px rgba(255,215,0,0)',
+                      ],
+                    }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                )}
+
+                {/* Nox cell shimmer — visible after it's been marked but bonus not yet triggered */}
+                {isNoxCell && !isNoxHit && isMarked && (
+                  <motion.div
+                    className="absolute inset-0 rounded-lg pointer-events-none"
+                    style={{ border: '1.5px solid rgba(255,215,0,0.5)' }}
+                    animate={{
+                      opacity: [0.4, 0.9, 0.4],
+                      boxShadow: [
+                        '0 0 4px rgba(255,215,0,0.2)',
+                        '0 0 14px rgba(255,215,0,0.5)',
+                        '0 0 4px rgba(255,215,0,0.2)',
+                      ],
+                    }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                )}
+
+                {/* Nox hit celebration */}
+                {isNoxHit && (
+                  <motion.div
+                    className="absolute inset-0 rounded-lg pointer-events-none"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{
+                      scale: [0, 1.6, 1],
+                      opacity: [0, 0.9, 0.5],
+                      backgroundColor: [
+                        'rgba(255,215,0,0)',
+                        'rgba(255,215,0,0.35)',
+                        'rgba(255,215,0,0.15)',
+                      ],
+                      boxShadow: [
+                        '0 0 0px rgba(255,215,0,0)',
+                        '0 0 30px rgba(255,215,0,0.8)',
+                        '0 0 10px rgba(255,215,0,0.3)',
+                      ],
+                    }}
+                    transition={{ duration: 0.8, ease: 'easeOut' }}
+                  />
+                )}
+
+                {/* Draw flash */}
                 {isJustCalled && (
                   <motion.div
                     className="absolute inset-0 rounded-lg pointer-events-none"
                     initial={{ 
-                      boxShadow: '0 0 0px rgba(0,240,255,0)', 
-                      borderColor: 'rgba(0,240,255,0)',
+                      boxShadow: '0 0 0px rgba(0,229,255,0)', 
+                      borderColor: 'rgba(0,229,255,0)',
                     }}
                     animate={{ 
                       boxShadow: [
-                        '0 0 0px rgba(0,240,255,0)',
-                        '0 0 20px rgba(0,240,255,0.7), 0 0 40px rgba(0,240,255,0.3)',
-                        '0 0 0px rgba(0,240,255,0)',
+                        '0 0 0px rgba(0,229,255,0)',
+                        '0 0 20px rgba(0,229,255,0.7), 0 0 40px rgba(0,229,255,0.3)',
+                        '0 0 0px rgba(0,229,255,0)',
                       ],
                       borderColor: [
-                        'rgba(0,240,255,0)',
-                        'rgba(0,240,255,0.8)',
-                        'rgba(0,240,255,0)',
+                        'rgba(0,229,255,0)',
+                        'rgba(0,229,255,0.8)',
+                        'rgba(0,229,255,0)',
                       ],
                     }}
                     transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -218,6 +277,23 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
           <span className="text-[10px] tracking-widest uppercase text-gold/70 font-medium">
             One Away
           </span>
+        </motion.div>
+      )}
+
+      {/* Nox bonus footer */}
+      {card.noxCell && !card.noxHit && card.status !== 'WON' && (
+        <motion.div
+          className="mt-2 pt-2 border-t border-gold/10 flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <motion.span
+            className="text-[10px] tracking-widest uppercase text-gold/50 font-medium"
+            animate={{ opacity: [0.4, 0.8, 0.4] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            ✦ Nox Bonus Active ✦
+          </motion.span>
         </motion.div>
       )}
     </motion.div>

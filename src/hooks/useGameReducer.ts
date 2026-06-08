@@ -12,6 +12,7 @@ const initialState: GameState = {
   drawnNumbers: new Set<number>(),
   cards: [],
   winningCardIndex: null,
+  bonusWinner: null,
   nearMissStates: [],
   seed: '',
   countdownValue: 3,
@@ -47,6 +48,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         currentDrawIndex: -1,
         drawnNumbers: new Set(),
         winningCardIndex: null,
+        bonusWinner: null,
         nearMissStates: action.cards.map(() => 99),
       };
     }
@@ -61,9 +63,36 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       const updatedCards = autoDaub(state.cards, newNumber);
       const winner = checkForWin(updatedCards);
-      const nearMissStates = updatedCards.map(card => getNearMissCount(card));
 
-      const finalCards = updatedCards.map((card, i) => ({
+      // Check for Nox bonus hit
+      let bonusWinner: number | null = state.bonusWinner;
+      if (bonusWinner === null) {
+        for (let i = 0; i < updatedCards.length; i++) {
+          const card = updatedCards[i];
+          if (card.noxCell && !card.noxHit) {
+            const noxCellValue = card.grid[card.noxCell.row][card.noxCell.col];
+            if (typeof noxCellValue.value === 'number' && noxCellValue.value === newNumber) {
+              bonusWinner = i;
+              break;
+            }
+          }
+        }
+      }
+
+      // Mark noxHit on cards that triggered
+      const cardsWithNox = updatedCards.map((card) => {
+        if (card.noxCell && !card.noxHit) {
+          const noxCellValue = card.grid[card.noxCell.row][card.noxCell.col];
+          if (typeof noxCellValue.value === 'number' && noxCellValue.value === newNumber) {
+            return { ...card, noxHit: true };
+          }
+        }
+        return card;
+      });
+
+      const nearMissStates = cardsWithNox.map(card => getNearMissCount(card));
+
+      const finalCards = cardsWithNox.map((card, i) => ({
         ...card,
         nearMissCount: nearMissStates[i],
         status: winner === i ? 'WON' as const : card.status,
@@ -75,47 +104,47 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         drawnNumbers: newDrawn,
         cards: finalCards,
         winningCardIndex: winner,
+        bonusWinner,
         nearMissStates,
         phase: winner !== null ? 'finished' : 'playing',
       };
     }
 
-   case 'MARK_CELL': {
-  // Guard: only allow marking if the cell's number has actually been drawn
-  const targetCell = state.cards[action.cardIndex].grid[action.row][action.col];
-  if (targetCell.value === 'FREE') return state;
-  if (typeof targetCell.value === 'number' && !state.drawnNumbers.has(targetCell.value)) {
-    return state; // Block — number hasn't been called yet
-  }
+    case 'MARK_CELL': {
+      const targetCell = state.cards[action.cardIndex].grid[action.row][action.col];
+      if (targetCell.value === 'FREE') return state;
+      if (typeof targetCell.value === 'number' && !state.drawnNumbers.has(targetCell.value)) {
+        return state;
+      }
 
-  const newCards = state.cards.map((card, ci) => {
-    if (ci !== action.cardIndex) return card;
-    const newGrid = card.grid.map((row, ri) =>
-      row.map((cell, coli) => {
-        if (ri === action.row && coli === action.col && !cell.marked && !cell.isFreeSpace) {
-          return { ...cell, marked: true };
-        }
-        return cell;
-      })
-    );
-    return { ...card, grid: newGrid };
-  });
+      const newCards = state.cards.map((card, ci) => {
+        if (ci !== action.cardIndex) return card;
+        const newGrid = card.grid.map((row, ri) =>
+          row.map((cell, coli) => {
+            if (ri === action.row && coli === action.col && !cell.marked && !cell.isFreeSpace) {
+              return { ...cell, marked: true };
+            }
+            return cell;
+          })
+        );
+        return { ...card, grid: newGrid };
+      });
 
-  const winner = checkForWin(newCards);
-  const nearMissStates = newCards.map(card => getNearMissCount(card));
+      const winner = checkForWin(newCards);
+      const nearMissStates = newCards.map(card => getNearMissCount(card));
 
-  return {
-    ...state,
-    cards: newCards.map((card, i) => ({
-      ...card,
-      nearMissCount: nearMissStates[i],
-      status: winner === i ? 'WON' as const : card.status,
-    })),
-    winningCardIndex: winner,
-    nearMissStates,
-    phase: winner !== null ? 'finished' : 'playing',
-  };
-}
+      return {
+        ...state,
+        cards: newCards.map((card, i) => ({
+          ...card,
+          nearMissCount: nearMissStates[i],
+          status: winner === i ? 'WON' as const : card.status,
+        })),
+        winningCardIndex: winner,
+        nearMissStates,
+        phase: winner !== null ? 'finished' : 'playing',
+      };
+    }
 
     case 'DECLARE_WIN': {
       return {
@@ -125,6 +154,18 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         cards: state.cards.map((card, i) => ({
           ...card,
           status: i === action.cardIndex ? 'WON' as const : 'STANDBY' as const,
+        })),
+      };
+    }
+
+    case 'TRIGGER_NOX_BONUS': {
+      return {
+        ...state,
+        bonusWinner: action.cardIndex,
+        phase: 'finished',
+        cards: state.cards.map((card, i) => ({
+          ...card,
+          noxHit: i === action.cardIndex ? true : card.noxHit,
         })),
       };
     }

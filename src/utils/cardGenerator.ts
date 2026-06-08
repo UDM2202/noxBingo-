@@ -47,6 +47,15 @@ function generateCardGrid(rng: SeededRandom): BingoCell[][] {
   return grid;
 }
 
+function pickNoxCell(rng: SeededRandom): { row: number; col: number } {
+  let row: number, col: number;
+  do {
+    row = Math.floor(rng.next() * 5);
+    col = Math.floor(rng.next() * 5);
+  } while (row === 2 && col === 2);
+  return { row, col };
+}
+
 export function generateCards(seed: string): BingoCard[] {
   const rng = new SeededRandom(seed + '-cards');
   const cards: BingoCard[] = [];
@@ -57,6 +66,8 @@ export function generateCards(seed: string): BingoCard[] {
       grid: generateCardGrid(rng),
       status: 'STANDBY',
       nearMissCount: 99,
+      noxCell: pickNoxCell(rng),
+      noxHit: false,
     });
   }
 

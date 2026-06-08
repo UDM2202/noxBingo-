@@ -13,7 +13,7 @@ function CountdownOverlay({ value }: CountdownOverlayProps) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
       style={{
-        background: 'radial-gradient(ellipse at center, rgba(10,15,26,0.95), rgba(10,15,26,0.98))',
+        background: 'radial-gradient(ellipse at center, rgba(11,11,69,0.95), rgba(11,11,69,0.98))',
       }}
     >
       {/* Outer decorative rings */}

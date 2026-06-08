@@ -25,7 +25,7 @@ export function useDrawLoop(
 
     intervalRef.current = setInterval(() => {
       dispatch({ type: 'DRAW_BALL' });
-    }, 4000);
+    }, 3000);
 
     return () => {
       if (intervalRef.current) {

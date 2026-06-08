@@ -2,14 +2,19 @@ import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 
 interface VictoryOverlayProps {
-  winningCardIndex: number;
+  winningCardIndex: number | null;   
+  bonusCardIndex: number | null;     
   roomCode: string;
   onPlayAgain: () => void;
 }
 
-function VictoryOverlay({ winningCardIndex, roomCode, onPlayAgain }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, onPlayAgain }: VictoryOverlayProps) {
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
+
+  const hasBingo = winningCardIndex !== null;
+  const hasBonus = bonusCardIndex !== null;
+  const isDoubleWin = hasBingo && hasBonus;
 
   // Simulate room code reveal on mount
   useEffect(() => {
@@ -52,7 +57,7 @@ function VictoryOverlay({ winningCardIndex, roomCode, onPlayAgain }: VictoryOver
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4 }}
       style={{
-        background: 'radial-gradient(ellipse at center, rgba(10,15,26,0.85), rgba(10,15,26,0.97))',
+        background: 'radial-gradient(ellipse at center, rgba(11,11,69,0.85), rgba(11,11,69,0.97))',
         backdropFilter: 'blur(8px)',
       }}
     >
@@ -125,11 +130,11 @@ function VictoryOverlay({ winningCardIndex, roomCode, onPlayAgain }: VictoryOver
               ease: 'easeInOut',
             }}
           >
-            🏆
+            {isDoubleWin ? '🏆✨' : hasBingo ? '🏆' : '✨'}
           </motion.span>
         </motion.div>
 
-        {/* BINGO text */}
+        {/* Title */}
         <motion.h2
           className="text-5xl md:text-6xl font-bold mb-4"
           initial={{ scale: 0, rotate: -10 }}
@@ -145,18 +150,22 @@ function VictoryOverlay({ winningCardIndex, roomCode, onPlayAgain }: VictoryOver
             className="bg-gradient-to-r from-gold via-yellow-200 to-gold bg-clip-text text-transparent"
             style={{ backgroundSize: '200% 100%' }}
           >
-            BINGO!
+            {isDoubleWin ? 'DOUBLE WIN!' : hasBingo ? 'BINGO!' : 'NOX BONUS!'}
           </span>
         </motion.h2>
 
-        {/* Winning card info */}
+        {/* Description */}
         <motion.p
           className="text-gray-400 mb-2 text-lg"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.8 }}
         >
-          Card {winningCardIndex + 1} takes the win
+          {isDoubleWin
+            ? 'Card ' + ((winningCardIndex ?? 0) + 1) + ' wins + Nox bonus!'
+            : hasBingo
+              ? 'Card ' + ((winningCardIndex ?? 0) + 1) + ' takes the win'
+              : 'Card ' + ((bonusCardIndex ?? 0) + 1) + ' hit the Nox bonus!'}
         </motion.p>
 
         {/* Room code */}

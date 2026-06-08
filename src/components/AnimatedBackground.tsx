@@ -115,7 +115,7 @@ function AnimatedBackground() {
         if (currentOpacity > 0.5) {
           ctx.beginPath();
           ctx.arc(star.x, star.y, star.radius * 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(0, 240, 255, ${currentOpacity * 0.08})`;
+         ctx.fillStyle = `rgba(0, 229, 255, ${currentOpacity * 0.1})`;
           ctx.fill();
         }
       });
