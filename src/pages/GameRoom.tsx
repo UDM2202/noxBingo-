@@ -19,13 +19,8 @@ function GameRoom() {
   const [showVictory, setShowVictory] = useState(false);
   const [victoryPhase, setVictoryPhase] = useState<'winning-cell' | 'card-scale' | 'caller-freeze' | 'overlay' | null>(null);
   const victoryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { play, speakNumber, soundEnabled, toggleSound, soundsLoaded } = useAudio();
+  const { play, speakNumber, soundEnabled, toggleSound } = useAudio();
 
-useEffect(() => {
-  if (soundsLoaded) {
-    console.log('🔊 All sounds loaded and ready');
-  }
-}, [soundsLoaded]);
 
   // Track previous values to detect actual changes
   const prevDrawIndex = useRef(-1);
