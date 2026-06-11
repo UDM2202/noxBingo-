@@ -29,10 +29,11 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
             : 'border-white/10 hover:border-white/20'
         }
       `}
-      style={{
-        background: 'linear-gradient(145deg, rgba(26,26,94,0.9), rgba(18,18,77,0.95))',
-        padding: '16px',
-      }}
+     style={{
+  background: 'linear-gradient(145deg, rgba(26,26,94,0.95), rgba(18,18,77,0.98))',
+  padding: '16px',
+  boxShadow: '0 4px 24px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.03) inset',
+}}
       animate={
         isWinning && victoryPhase === 'card-scale'
           ? { scale: 1.05, zIndex: 10 }
@@ -47,6 +48,14 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
           backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)',
         }}
       />
+
+      {/* Top highlight edge */}
+<div 
+  className="absolute top-0 left-4 right-4 h-px pointer-events-none"
+  style={{
+    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent)',
+  }}
+/>
 
       {/* Card header */}
       <div className="relative grid grid-cols-5 text-center pb-2 border-b border-white/5 mb-2">
@@ -142,40 +151,39 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                     {typeof cell.value === 'number' ? cell.value : ''}
                   </motion.span>
                 )}
+                  {/* Nox cell circle — unmarked */}
+                  {isNoxCell && !isNoxHit && !isMarked && (
+                    <motion.div
+                      className="absolute inset-2 rounded-full pointer-events-none"
+                      style={{ border: '2px solid rgba(255,215,0,0.4)' }}
+                      animate={{
+                        opacity: [0.3, 0.8, 0.3],
+                        boxShadow: [
+                          '0 0 0px rgba(255,215,0,0)',
+                          '0 0 12px rgba(255,215,0,0.4)',
+                          '0 0 0px rgba(255,215,0,0)',
+                        ],
+                      }}
+                      transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+)}
 
-                {/* Nox cell shimmer — visible before it's hit */}
-                {isNoxCell && !isNoxHit && !isMarked && (
-                  <motion.div
-                    className="absolute inset-0 rounded-lg pointer-events-none"
-                    style={{ border: '1.5px solid rgba(255,215,0,0.35)' }}
-                    animate={{
-                      opacity: [0.3, 0.7, 0.3],
-                      boxShadow: [
-                        '0 0 0px rgba(255,215,0,0)',
-                        '0 0 8px rgba(255,215,0,0.3)',
-                        '0 0 0px rgba(255,215,0,0)',
-                      ],
-                    }}
-                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                  />
-                )}
-
-                {/* Nox cell shimmer — visible after it's been marked but bonus not yet triggered */}
-                {isNoxCell && !isNoxHit && isMarked && (
-                  <motion.div
-                    className="absolute inset-0 rounded-lg pointer-events-none"
-                    style={{ border: '1.5px solid rgba(255,215,0,0.5)' }}
-                    animate={{
-                      opacity: [0.4, 0.9, 0.4],
-                      boxShadow: [
-                        '0 0 4px rgba(255,215,0,0.2)',
-                        '0 0 14px rgba(255,215,0,0.5)',
-                        '0 0 4px rgba(255,215,0,0.2)',
-                      ],
-                    }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                  />
-                )}
+                                    {/* Nox cell circle — marked, bonus active */}
+                    {isNoxCell && !isNoxHit && isMarked && (
+                      <motion.div
+                        className="absolute inset-2 rounded-full pointer-events-none"
+                        style={{ border: '2px solid rgba(255,215,0,0.5)' }}
+                        animate={{
+                          opacity: [0.4, 0.9, 0.4],
+                          boxShadow: [
+                            '0 0 4px rgba(255,215,0,0.2)',
+                            '0 0 16px rgba(255,215,0,0.5)',
+                            '0 0 4px rgba(255,215,0,0.2)',
+                          ],
+                        }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                      />
+                    )}
 
                 {/* Nox hit celebration */}
                 {isNoxHit && (

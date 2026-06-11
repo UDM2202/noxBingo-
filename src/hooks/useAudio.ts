@@ -170,14 +170,12 @@ export function useAudio() {
       speechSynthRef.current.cancel();
 
       const utterance = new SpeechSynthesisUtterance(letter + ' ' + number);
-      utterance.rate = 0.9;
-      utterance.pitch = 1.1;
+      utterance.rate = 0.85;
+      utterance.pitch = 0.95;
       utterance.volume = 0.7;
+      utterance.lang = 'en-US';
 
-      const voices = speechSynthRef.current.getVoices();
-      const maleVoice = voices.find(v => v.name.includes('Male') || v.name.includes('Daniel'));
-      if (maleVoice) utterance.voice = maleVoice;
-
+      // Do not manually pick a voice — let the browser decide based on lang
       speechSynthRef.current.speak(utterance);
     } catch {
       // Silently fail

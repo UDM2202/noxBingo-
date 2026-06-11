@@ -21,7 +21,6 @@ function GameRoom() {
   const victoryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { play, speakNumber, soundEnabled, toggleSound } = useAudio();
 
-
   // Track previous values to detect actual changes
   const prevDrawIndex = useRef(-1);
   const prevPhase = useRef(state.phase);
@@ -55,7 +54,6 @@ function GameRoom() {
     }
   }, [state.phase, state.countdownValue, play]);
 
-
   // Game start whoosh — only once when cards deploy
   useEffect(() => {
     if (state.phase === 'playing' && !hasPlayedGameStart.current && state.cards.length > 0) {
@@ -87,31 +85,43 @@ function GameRoom() {
     }
   }, [state.phase, state.currentDrawIndex, state.drawSequence, play, speakNumber]);
 
-  // Win fanfare — fires when phase changes to finished
+  // Win fanfare — only on actual win, not loss
   useEffect(() => {
     if (state.phase === 'finished' && prevPhase.current !== 'finished') {
-      play('win');
+      const hasWin = state.winningCardIndex !== null || state.bonusWinner !== null;
+      if (hasWin) {
+        play('win');
+      }
     }
     prevPhase.current = state.phase;
-  }, [state.phase, play]);
+  }, [state.phase, state.winningCardIndex, state.bonusWinner, play]);
 
+  // Victory choreography — triggers for both win and no-winner
   useEffect(() => {
-    const hasWin = state.winningCardIndex !== null || state.bonusWinner !== null;
-    if (hasWin && state.phase === 'finished' && !showVictory) {
-      setVictoryPhase('winning-cell');
+    if (state.phase === 'finished' && !showVictory) {
+      const hasWin = state.winningCardIndex !== null || state.bonusWinner !== null;
 
-      victoryTimerRef.current = setTimeout(() => {
-        setVictoryPhase('card-scale');
-      }, 400);
+      if (hasWin) {
+        setVictoryPhase('winning-cell');
 
-      victoryTimerRef.current = setTimeout(() => {
-        setVictoryPhase('caller-freeze');
-      }, 800);
+        victoryTimerRef.current = setTimeout(() => {
+          setVictoryPhase('card-scale');
+        }, 400);
 
-      victoryTimerRef.current = setTimeout(() => {
-        setVictoryPhase('overlay');
-        setShowVictory(true);
-      }, 1200);
+        victoryTimerRef.current = setTimeout(() => {
+          setVictoryPhase('caller-freeze');
+        }, 800);
+
+        victoryTimerRef.current = setTimeout(() => {
+          setVictoryPhase('overlay');
+          setShowVictory(true);
+        }, 1200);
+      } else {
+        // No winner — show overlay after a short pause
+        victoryTimerRef.current = setTimeout(() => {
+          setShowVictory(true);
+        }, 600);
+      }
     }
 
     return () => {
@@ -119,7 +129,7 @@ function GameRoom() {
         clearTimeout(victoryTimerRef.current);
       }
     };
-  }, [state.winningCardIndex, state.bonusWinner, state.phase, showVictory]);
+  }, [state.phase, state.winningCardIndex, state.bonusWinner, showVictory]);
 
   function handlePlayAgain() {
     setShowVictory(false);
@@ -197,9 +207,10 @@ function GameRoom() {
                 <motion.div
                   key={card.id}
                   animate={{
-                    opacity: hasWinner && !isWinner ? 0.3 : 1,
-                    scale: isWinner && victoryPhase === 'card-scale' ? 1.08 : 1,
+                    opacity: hasWinner && !isWinner ? 0.2 : 1,
+                    scale: isWinner && victoryPhase === 'card-scale' ? 1.12 : 1,
                     zIndex: isWinner ? 10 : 1,
+                    filter: hasWinner && !isWinner ? 'blur(2px)' : 'blur(0px)',
                   }}
                   transition={{ duration: 0.5, ease: 'easeOut' }}
                 >
@@ -239,7 +250,7 @@ function GameRoom() {
       </div>
 
       <AnimatePresence>
-        {showVictory && (state.winningCardIndex !== null || state.bonusWinner !== null) && (
+        {showVictory && state.phase === 'finished' && (
           <VictoryOverlay
             winningCardIndex={state.winningCardIndex}
             bonusCardIndex={state.bonusWinner}

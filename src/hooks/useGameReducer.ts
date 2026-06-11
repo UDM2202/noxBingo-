@@ -18,6 +18,8 @@ const initialState: GameState = {
   countdownValue: 3,
 };
 
+const MAX_BALLS = 24; // Ball 25 (0-indexed: 0 = ball 1, 24 = ball 25)
+
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'START_COUNTDOWN': {
@@ -98,6 +100,23 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         status: winner === i ? 'WON' as const : card.status,
       }));
 
+      // Force game end at MAX_BALLS — win only counts if it happened naturally
+      const forcedEnd = nextIndex >= MAX_BALLS;
+
+      if (forcedEnd) {
+        return {
+          ...state,
+          currentDrawIndex: nextIndex,
+          drawnNumbers: newDrawn,
+          cards: finalCards,
+          winningCardIndex: winner, // Can be null (loss) or a card index (last-ball win)
+          bonusWinner,
+          nearMissStates,
+          phase: 'finished',
+        };
+      }
+
+      // Normal flow — game continues unless someone won
       return {
         ...state,
         currentDrawIndex: nextIndex,

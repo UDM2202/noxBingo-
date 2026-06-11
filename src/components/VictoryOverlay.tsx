@@ -15,6 +15,7 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, onPlayAgai
   const hasBingo = winningCardIndex !== null;
   const hasBonus = bonusCardIndex !== null;
   const isDoubleWin = hasBingo && hasBonus;
+  const isNoWinner = !hasBingo && !hasBonus;
 
   // Simulate room code reveal on mount
   useEffect(() => {
@@ -108,10 +109,10 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, onPlayAgai
           damping: 18,
         }}
       >
-        {/* Glow behind trophy */}
+        {/* Glow behind icon */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-gold rounded-full blur-[80px] opacity-20 pointer-events-none" />
 
-        {/* Trophy */}
+        {/* Icon */}
         <motion.div
           className="text-7xl md:text-8xl mb-6 relative"
           initial={{ y: -30, opacity: 0 }}
@@ -130,7 +131,7 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, onPlayAgai
               ease: 'easeInOut',
             }}
           >
-            {isDoubleWin ? '🏆✨' : hasBingo ? '🏆' : '✨'}
+            {isNoWinner ? '💫' : isDoubleWin ? '🏆✨' : hasBingo ? '🏆' : '✨'}
           </motion.span>
         </motion.div>
 
@@ -150,7 +151,7 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, onPlayAgai
             className="bg-gradient-to-r from-gold via-yellow-200 to-gold bg-clip-text text-transparent"
             style={{ backgroundSize: '200% 100%' }}
           >
-            {isDoubleWin ? 'DOUBLE WIN!' : hasBingo ? 'BINGO!' : 'NOX BONUS!'}
+            {isNoWinner ? 'NO WINNER' : isDoubleWin ? 'DOUBLE WIN!' : hasBingo ? 'BINGO!' : 'NOX BONUS!'}
           </span>
         </motion.h2>
 
@@ -161,12 +162,43 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, onPlayAgai
           animate={{ opacity: 1 }}
           transition={{ delay: 0.8 }}
         >
-          {isDoubleWin
-            ? 'Card ' + ((winningCardIndex ?? 0) + 1) + ' wins + Nox bonus!'
-            : hasBingo
-              ? 'Card ' + ((winningCardIndex ?? 0) + 1) + ' takes the win'
-              : 'Card ' + ((bonusCardIndex ?? 0) + 1) + ' hit the Nox bonus!'}
+          {isNoWinner
+            ? 'Better luck next time'
+            : isDoubleWin
+              ? 'Card ' + ((winningCardIndex ?? 0) + 1) + ' wins + Nox bonus!'
+              : hasBingo
+                ? 'Card ' + ((winningCardIndex ?? 0) + 1) + ' takes the win'
+                : 'Card ' + ((bonusCardIndex ?? 0) + 1) + ' hit the Nox bonus!'}
         </motion.p>
+
+        {/* Prize announcement */}
+        {(hasBingo || hasBonus) && (
+          <motion.div
+            className="mb-6"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.0 }}
+          >
+            {hasBingo && (
+              <motion.p 
+                className="text-2xl font-bold text-gold"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
+                +100 NOX
+              </motion.p>
+            )}
+            {hasBonus && (
+              <motion.p 
+                className="text-lg font-semibold text-[#00E5FF] mt-1"
+                animate={{ opacity: [0.6, 1, 0.6] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                +25 NOX Bonus
+              </motion.p>
+            )}
+          </motion.div>
+        )}
 
         {/* Room code */}
         <motion.div
