@@ -252,11 +252,13 @@ function GameRoom() {
       <AnimatePresence>
         {showVictory && state.phase === 'finished' && (
           <VictoryOverlay
-            winningCardIndex={state.winningCardIndex}
-            bonusCardIndex={state.bonusWinner}
-            roomCode={state.roomCode}
-            onPlayAgain={handlePlayAgain}
-          />
+  winningCardIndex={state.winningCardIndex}
+  bonusCardIndex={state.bonusWinner}
+  roomCode={state.roomCode}
+  cards={state.cards}
+  drawnNumbers={state.drawnNumbers}
+  onPlayAgain={handlePlayAgain}
+/>
         )}
       </AnimatePresence>
 
