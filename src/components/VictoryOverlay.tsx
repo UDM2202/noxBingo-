@@ -7,11 +7,10 @@ interface VictoryOverlayProps {
   bonusCardIndex: number | null;
   roomCode: string;
   cards: BingoCard[];
-  drawnNumbers: Set<number>;
   onPlayAgain: () => void;
 }
 
-function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, drawnNumbers, onPlayAgain }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onPlayAgain }: VictoryOverlayProps) {
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
   const [viewingCards, setViewingCards] = useState(false);

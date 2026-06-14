@@ -256,7 +256,6 @@ function GameRoom() {
   bonusCardIndex={state.bonusWinner}
   roomCode={state.roomCode}
   cards={state.cards}
-  drawnNumbers={state.drawnNumbers}
   onPlayAgain={handlePlayAgain}
 />
         )}
