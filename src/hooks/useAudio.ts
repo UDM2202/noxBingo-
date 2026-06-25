@@ -117,7 +117,7 @@ const NUMBER_TONES: Record<string, number[]> = {
   '6': [550], '7': [600], '8': [650], '9': [700], '0': [250],
 };
 
-function playSynthesizedVoice(letter: string, number: number, style: 'robot' | 'alien') {
+// function playSynthesizedVoice(letter: string, number: number, style: 'robot' | 'alien') {
   const ctx = getAudioContext();
   const now = ctx.currentTime;
   const letterFreq = LETTER_TONES[letter] || 400;
@@ -166,7 +166,7 @@ function playSynthesizedVoice(letter: string, number: number, style: 'robot' | '
   }
 }
 
-function playRobotTone(ctx: AudioContext, freq: number, duration: number, startTime: number, output: AudioNode) {
+// function playRobotTone(ctx: AudioContext, freq: number, duration: number, startTime: number, output: AudioNode) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   const filter = ctx.createBiquadFilter();
@@ -201,7 +201,7 @@ function playRobotTone(ctx: AudioContext, freq: number, duration: number, startT
   osc.stop(startTime + duration);
 }
 
-function playAlienTone(ctx: AudioContext, freq: number, duration: number, startTime: number, output: AudioNode) {
+// function playAlienTone(ctx: AudioContext, freq: number, duration: number, startTime: number, output: AudioNode) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   const filter = ctx.createBiquadFilter();
@@ -239,7 +239,7 @@ function playAlienTone(ctx: AudioContext, freq: number, duration: number, startT
   osc.stop(startTime + duration);
 }
 
-function playAlienSlide(ctx: AudioContext, startFreq: number, endFreq: number, duration: number, startTime: number, output: AudioNode) {
+// function playAlienSlide(ctx: AudioContext, startFreq: number, endFreq: number, duration: number, startTime: number, output: AudioNode) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   const filter = ctx.createBiquadFilter();
@@ -401,6 +401,7 @@ export function useAudio() {
   }, [voicePreset, speakNumber]);
   return { play, speakNumber, soundEnabled, toggleSound, voicePreset, changeVoice, previewVoice, VOICE_PRESETS, voicesReady };
 }
+
 
 
 

@@ -7,13 +7,12 @@ interface VictoryOverlayProps {
   roomCode: string;
   cards: BingoCard[];
   onPlayAgain: () => void;
-  isMultiplayer?: boolean;
-  isMultiplayerWinner?: boolean;
+    isMultiplayerWinner?: boolean;
   isMultiplayerLoser?: boolean;
   winnerName?: string | null;
   playerName?: string;
 }
-function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onPlayAgain, isMultiplayer, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onPlayAgain, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName }: VictoryOverlayProps) {
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
   const [viewingCards, setViewingCards] = useState(false);
@@ -163,3 +162,4 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
   );
 }
 export default VictoryOverlay;
+

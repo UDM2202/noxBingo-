@@ -36,7 +36,7 @@ function GameRoom() {
   const hasConnected = useRef(false);
 
   const isMultiplayer = mode === 'create' || mode === 'join';
-  const [isHost, setIsHost] = useState(mode === 'create');
+  const [isHost] = useState(mode === 'create');
   const myPlayerId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -69,13 +69,13 @@ function GameRoom() {
   }, [isMultiplayer, soloState.phase, soloState.countdownValue, deployCards, dispatch]);
 
   useDrawLoop(
-    isMultiplayer ? 'idle' : soloState.phase,
+    (isMultiplayer ? 'countdown' : soloState.phase) as GamePhase,
     soloState.currentDrawIndex,
     soloState.drawSequence.length,
     dispatch
   );
 
-  const phase = isMultiplayer ? multi.phase : soloState.phase;
+  const phase = (isMultiplayer ? multi.phase : soloState.phase) as GamePhase;
   const cards = isMultiplayer ? multi.cards : soloState.cards;
   const currentBall = isMultiplayer
     ? multi.currentBall
@@ -326,6 +326,7 @@ function GameRoom() {
 }
 
 export default GameRoom;
+
 
 
 
