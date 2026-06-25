@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { GamePhase } from '../types/game';
 import { useGameReducer } from '../hooks/useGameReducer';
 import { useDrawLoop } from '../hooks/useDrawLoop';
 import { useMultiplayer } from '../hooks/useMultiplayer';
@@ -70,13 +69,13 @@ function GameRoom() {
   }, [isMultiplayer, soloState.phase, soloState.countdownValue, deployCards, dispatch]);
 
   useDrawLoop(
-    (isMultiplayer ? 'countdown' : soloState.phase) as GamePhase,
+    (isMultiplayer ? 'countdown' : soloState.phase) ,
     soloState.currentDrawIndex,
     soloState.drawSequence.length,
     dispatch
   );
 
-  const phase = (isMultiplayer ? multi.phase : soloState.phase) as GamePhase;
+  const phase = (isMultiplayer ? multi.phase : soloState.phase) ;
   const cards = isMultiplayer ? multi.cards : soloState.cards;
   const currentBall = isMultiplayer
     ? multi.currentBall
@@ -326,6 +325,7 @@ function GameRoom() {
 }
 
 export default GameRoom;
+
 
 
 

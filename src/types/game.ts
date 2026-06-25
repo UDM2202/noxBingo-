@@ -17,7 +17,7 @@ export interface BingoCard {
   noxHit: boolean;
 }
 
-export type GamePhase = 'countdown' | 'playing' | 'finished';
+export type GamePhase = 'countdown' | 'playing' | 'finished' | 'lobby' | 'idle';
 
 export interface GameState {
   roomCode: string;
