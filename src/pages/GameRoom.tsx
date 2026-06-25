@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { GamePhase } from '../types/game';
 import { useGameReducer } from '../hooks/useGameReducer';
 import { useDrawLoop } from '../hooks/useDrawLoop';
 import { useMultiplayer } from '../hooks/useMultiplayer';
@@ -303,7 +304,6 @@ function GameRoom() {
             roomCode={displayRoomCode || ''}
             cards={cards}
             onPlayAgain={handlePlayAgain}
-            isMultiplayer={isMultiplayer}
             isMultiplayerWinner={isMultiplayerWinner}
             isMultiplayerLoser={isMultiplayerLoser}
             winnerName={winnerName}
@@ -326,6 +326,8 @@ function GameRoom() {
 }
 
 export default GameRoom;
+
+
 
 
 
