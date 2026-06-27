@@ -20,7 +20,7 @@ function GameRoom() {
   const navigate = useNavigate();
   const mode = searchParams.get('mode') || 'solo';
   const playerName = searchParams.get('name') || 'Player';
-  const prizeTier = searchParams.get('prize') || 'standard';
+  const _prizeTier = searchParams.get('prize') || 'standard';
 
   const { state: soloState, dispatch, deployCards } = useGameReducer();
   const multi = useMultiplayer();
@@ -341,6 +341,7 @@ function GameRoom() {
 }
 
 export default GameRoom;
+
 
 
 
