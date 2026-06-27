@@ -7,12 +7,13 @@ interface VictoryOverlayProps {
   roomCode: string;
   cards: BingoCard[];
   onPlayAgain: () => void;
+  onBackToLobby?: () => void;
     isMultiplayerWinner?: boolean;
   isMultiplayerLoser?: boolean;
   winnerName?: string | null;
   playerName?: string;
 }
-function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onPlayAgain, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName }: VictoryOverlayProps) {
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
   const [viewingCards, setViewingCards] = useState(false);
@@ -86,8 +87,8 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
           <button onClick={nextCard} style={{ padding: '8px 16px', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#fff', background: 'rgba(255,255,255,0.05)', cursor: 'pointer', fontSize: '18px' }}>▶</button>
         </div>
         <div style={{ display: 'flex', gap: '16px', marginTop: '16px' }}>
-          <button onClick={() => setViewingCards(false)} style={{ padding: '10px 24px', border: '1px solid rgba(255,215,0,0.3)', borderRadius: '8px', color: '#FFD700', background: 'rgba(255,215,0,0.1)', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>Back to Results</button>
-          <button onClick={handlePlayAgain} style={{ padding: '10px 24px', border: '1px solid rgba(0,229,255,0.3)', borderRadius: '8px', color: '#00E5FF', background: 'rgba(0,229,255,0.1)', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>Play Again</button>
+          <button onClick={() => setViewingCards(false)} style={{ padding: '10px 24px', border: '1px solid rgba(255,215,0,0.3)', borderRadius: '8px', color: '#FFD700', background: 'rgba(255,215,0,0.1)', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>Back to Results</button><button onClick={onBackToLobby || handlePlayAgain} style={{ padding: '10px 24px', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#8B8BD4', background: 'rgba(255,255,255,0.05)', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>Lobby</button>
+<button onClick={handlePlayAgain} style={{ padding: '10px 24px', border: '1px solid rgba(0,229,255,0.3)', borderRadius: '8px', color: '#00E5FF', background: 'rgba(0,229,255,0.1)', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>Play Again</button>
         </div>
       </motion.div>
     );
@@ -148,6 +149,13 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
             ))}
           </div>
         </motion.div>
+        {onBackToLobby && (
+          <motion.button onClick={onBackToLobby} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.05 }}
+            style={{ padding: '10px 28px', margin: '8px', fontSize: '14px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#8B8BD4', cursor: 'pointer' }}
+            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            Lobby
+          </motion.button>
+        )}
         <motion.button onClick={handlePlayAgain} disabled={isNewCodeRevealing} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }}
           style={{ position: 'relative', padding: '4px 8px', margin: '16px', fontSize: '16px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', background: 'linear-gradient(135deg, rgba(255,215,0,0.15), rgba(0,240,255,0.1))', border: '1px solid rgba(255,215,0,0.3)', borderRadius: '8px', color: '#FFD700', cursor: 'pointer', opacity: isNewCodeRevealing ? 0.5 : 1 }}
           whileHover={{ scale: 1.03, boxShadow: '0 0 30px rgba(255,215,0,0.2)' }} whileTap={{ scale: 0.97 }}>
@@ -162,4 +170,6 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
   );
 }
 export default VictoryOverlay;
+
+
 

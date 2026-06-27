@@ -20,6 +20,7 @@ function GameRoom() {
   const navigate = useNavigate();
   const mode = searchParams.get('mode') || 'solo';
   const playerName = searchParams.get('name') || 'Player';
+  const prizeTier = searchParams.get('prize') || 'standard';
 
   const { state: soloState, dispatch, deployCards } = useGameReducer();
   const multi = useMultiplayer();
@@ -36,6 +37,10 @@ function GameRoom() {
   const hasConnected = useRef(false);
 
   const isMultiplayer = mode === 'create' || mode === 'join';
+  const [balance, setBalance] = useState(() => {
+    const saved = localStorage.getItem('noxbingo-balance');
+    return saved ? parseInt(saved) : 1000;
+  });
   const [isHost] = useState(mode === 'create');
   const myPlayerId = useRef<string | null>(null);
 
@@ -130,7 +135,11 @@ function GameRoom() {
   useEffect(() => {
     if (phase === 'finished' && prevPhase.current !== 'finished') {
       const hasWin = winningCardIndex !== null || bonusWinner !== null;
-      if (hasWin) play('win');
+      if (hasWin) {
+      play('win');
+      if (winningCardIndex !== null) updateBalance(100);
+      if (bonusWinner !== null) updateBalance(25);
+    }
     }
     prevPhase.current = phase;
   }, [phase, winningCardIndex, bonusWinner, play]);
@@ -153,6 +162,11 @@ function GameRoom() {
     return () => { if (victoryTimerRef.current) clearTimeout(victoryTimerRef.current); };
   }, [phase, winningCardIndex, bonusWinner, showVictory]);
 
+  function updateBalance(amount: number) {
+    const newBal = balance + amount;
+    setBalance(newBal);
+    localStorage.setItem('noxbingo-balance', String(newBal));
+  }
   function handlePlayAgain() {
     setShowVictory(false);
     setVictoryPhase(null);
@@ -189,6 +203,7 @@ function GameRoom() {
         onToggleSound={toggleSound}
         onOpenSettings={() => setShowAudioSettings(true)}
         onBackToLobby={handleBackToLobby}
+        balance={balance}
       />
 
       <div className="flex-1 overflow-y-auto px-4 pb-4" style={{ paddingTop: '12px' }}>
@@ -303,6 +318,7 @@ function GameRoom() {
             roomCode={displayRoomCode || ''}
             cards={cards}
             onPlayAgain={handlePlayAgain}
+            onBackToLobby={handleBackToLobby}
             isMultiplayerWinner={isMultiplayerWinner}
             isMultiplayerLoser={isMultiplayerLoser}
             winnerName={winnerName}
@@ -325,6 +341,10 @@ function GameRoom() {
 }
 
 export default GameRoom;
+
+
+
+
 
 
 

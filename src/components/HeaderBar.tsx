@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+﻿import { motion } from 'framer-motion';
 
 interface HeaderBarProps {
   roomCode: string;
@@ -10,9 +10,10 @@ interface HeaderBarProps {
   onToggleSound: () => void;
   onOpenSettings: () => void;
   onBackToLobby: () => void;
+  balance?: number;
 }
 
-function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, soundEnabled, onToggleSound, onOpenSettings, onBackToLobby }: HeaderBarProps) {
+function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, soundEnabled, onToggleSound, onOpenSettings, onBackToLobby, balance }: HeaderBarProps) {
   return (
     <motion.header
       className="sticky top-0 z-30 bg-midnight-deep/90 backdrop-blur-xl border-b border-white/5"
@@ -62,11 +63,16 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, sound
                   {char}
                 </motion.span>
               ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Game Status */}
+            </div></div>
+</div>
+<div className="h-6 w-px bg-white/8" />
+{balance !== undefined && (
+  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <span style={{ fontSize: '10px', letterSpacing: '0.3em', textTransform: 'uppercase', color: '#5C5C9E', fontWeight: 500 }}>Balance</span>
+    <span style={{ fontSize: '16px', fontFamily: 'monospace', fontWeight: 700, color: '#FFD700' }}>{balance.toLocaleString()} NOX</span>
+  </div>
+)}
+{/* Right: Game Status */}
         <div className="flex items-center gap-8 pr-1">
 
           {/* Settings button */}
@@ -226,3 +232,4 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, sound
 }
 
 export default HeaderBar;
+

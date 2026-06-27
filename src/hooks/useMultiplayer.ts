@@ -1,18 +1,16 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { BingoCard } from '../types/game';
-
 type ServerMessage = {
   type: string;
   [key: string]: any;
 };
-
 type MultiplayerState = {
   connected: boolean;
   roomCode: string | null;
   playerId: string | null;
+  hostId: string | null;
   players: { id: string; name: string }[];
   phase: 'idle' | 'lobby' | 'countdown' | 'playing' | 'finished';
-  hostId: string | null;
   cards: BingoCard[];
   currentBall: number | null;
   currentLetter: string | null;
@@ -24,18 +22,17 @@ type MultiplayerState = {
   cardIndex: number | null;
   error: string | null;
 };
-
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
-
 export function useMultiplayer() {
   const wsRef = useRef<WebSocket | null>(null);
+  const mountedRef = useRef(true);
   const [state, setState] = useState<MultiplayerState>({
     connected: false,
     roomCode: null,
     playerId: null,
+    hostId: null,
     players: [],
     phase: 'idle',
-    hostId: null,
     cards: [],
     currentBall: null,
     currentLetter: null,
@@ -47,17 +44,17 @@ export function useMultiplayer() {
     cardIndex: null,
     error: null,
   });
-
-  // Connect once on first use
   useEffect(() => {
+    mountedRef.current = true;
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
-
     ws.onopen = () => {
-      setState(prev => ({ ...prev, connected: true, error: null }));
+      if (mountedRef.current) {
+        setState(prev => ({ ...prev, connected: true, error: null }));
+      }
     };
-
     ws.onmessage = (event) => {
+      if (!mountedRef.current) return;
       const message: ServerMessage = JSON.parse(event.data);
       setState(prev => {
         switch (message.type) {
@@ -84,58 +81,45 @@ export function useMultiplayer() {
         }
       });
     };
-
     ws.onclose = () => {
-      setState(prev => ({ ...prev, connected: false }));
+      if (mountedRef.current) {
+        setState(prev => ({ ...prev, connected: false }));
+      }
     };
-
-    ws.onerror = () => {
-      setState(prev => ({ ...prev, error: 'Connection failed. Is the server running?' }));
-    };
-
     return () => {
+      mountedRef.current = false;
       ws.close();
     };
   }, []);
-
-  const createRoom = useCallback((playerName: string) => {
+  const createRoom = useCallback((playerName: string, prizeTier: string = 'standard') => {
     const ws = wsRef.current;
     if (!ws) return;
     if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'create_room', playerName }));
+      ws.send(JSON.stringify({ type: 'create_room', playerName, prizeTier }));
     } else {
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'create_room', playerName }));
-      };
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'create_room', playerName, prizeTier }));
     }
   }, []);
-
   const joinRoom = useCallback((roomCode: string, playerName: string) => {
     const ws = wsRef.current;
     if (!ws) return;
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'join_room', roomCode: roomCode.toUpperCase(), playerName }));
     } else {
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'join_room', roomCode: roomCode.toUpperCase(), playerName }));
-      };
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'join_room', roomCode: roomCode.toUpperCase(), playerName }));
     }
   }, []);
-
   const startGame = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: 'start_game' }));
   }, []);
-
   const leaveRoom = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: 'leave_room' }));
     setState(prev => ({
-      ...prev,
-      roomCode: null, playerId: null, hostId: null, players: [], phase: 'idle', cards: [],
+      ...prev, roomCode: null, playerId: null, hostId: null, players: [], phase: 'idle', cards: [],
       currentBall: null, currentLetter: null, drawnBalls: [],
       winningPlayerId: null, winningPlayerName: null, bonusWinnerId: null, bonusWinnerName: null, cardIndex: null, error: null,
     }));
   }, []);
-
   return { ...state, createRoom, joinRoom, startGame, leaveRoom };
 }
 

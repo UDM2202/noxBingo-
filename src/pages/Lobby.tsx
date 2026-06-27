@@ -2,24 +2,22 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { useAudio } from '../hooks/useAudio';
-
 function Lobby() {
   const navigate = useNavigate();
   const [isInitiating, setIsInitiating] = useState(false);
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [mode, setMode] = useState<'select' | 'create' | 'join'>('select');
+  const [prizeTier, setPrizeTier] = useState('standard');
   const { play } = useAudio();
-
   function handleCreateRoom() {
     if (!playerName.trim()) return;
     setIsInitiating(true);
     play('gameStart');
     setTimeout(() => {
-      navigate('/room/new?mode=create&name=' + encodeURIComponent(playerName));
+      navigate('/room/new?mode=create&name=' + encodeURIComponent(playerName) + '&prize=' + prizeTier);
     }, 600);
   }
-
   function handleJoinRoom() {
     if (!playerName.trim() || !roomCode.trim()) return;
     setIsInitiating(true);
@@ -28,7 +26,6 @@ function Lobby() {
       navigate('/room/' + roomCode.toUpperCase() + '?mode=join&name=' + encodeURIComponent(playerName));
     }, 600);
   }
-
   if (mode === 'create' || mode === 'join') {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
@@ -43,6 +40,32 @@ function Lobby() {
               onFocus={(e) => e.target.style.borderColor = 'rgba(0,229,255,0.5)'}
               onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'} />
           </div>
+          {mode === 'create' && (
+            <div style={{ marginBottom: '24px' }}>
+              <p style={{ fontSize: '12px', color: '#5C5C9E', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '12px', textAlign: 'center' }}>Prize Pool</p>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                {(['casual', 'standard', 'high'] as const).map(tier => (
+                  <button key={tier} onClick={() => setPrizeTier(tier)}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '10px',
+                      border: prizeTier === tier ? '1px solid rgba(0,229,255,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                      backgroundColor: prizeTier === tier ? 'rgba(0,229,255,0.08)' : 'transparent',
+                      color: prizeTier === tier ? '#00E5FF' : '#8B8BD4',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                    }}>
+                    {tier === 'casual' ? '50/10' : tier === 'standard' ? '100/25' : '500/100'}
+                  </button>
+                ))}
+              </div>
+              <p style={{ fontSize: '10px', color: '#5C5C9E', marginTop: '6px', textAlign: 'center' }}>
+                {prizeTier === 'casual' ? 'BINGO: 50 NOX | Bonus: 10 NOX' : prizeTier === 'standard' ? 'BINGO: 100 NOX | Bonus: 25 NOX' : 'BINGO: 500 NOX | Bonus: 100 NOX'}
+              </p>
+            </div>
+          )}
           {mode === 'join' && (
             <div style={{ marginBottom: '32px' }}>
               <input type="text" placeholder="Room code (e.g. ABC123)" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} maxLength={6}
@@ -74,7 +97,6 @@ function Lobby() {
       </div>
     );
   }
-
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       <div style={{ position: 'absolute', top: '33%', left: '50%', transform: 'translate(-50%, -50%)', width: '600px', height: '300px', background: '#00E5FF', borderRadius: '50%', filter: 'blur(120px)', opacity: 0.04, pointerEvents: 'none' }} />
@@ -121,5 +143,4 @@ function Lobby() {
     </div>
   );
 }
-
 export default Lobby;
