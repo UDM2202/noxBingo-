@@ -10,6 +10,10 @@ function Lobby() {
   const [mode, setMode] = useState<'select' | 'create' | 'join'>('select');
   const [prizeTier, setPrizeTier] = useState('standard');
   const { play } = useAudio();
+  const [balance] = useState(() => {
+    const saved = localStorage.getItem('noxbingo-balance');
+    return saved ? parseInt(saved) : 1000;
+  });
   function handleCreateRoom() {
     if (!playerName.trim()) return;
     setIsInitiating(true);
@@ -46,17 +50,7 @@ function Lobby() {
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                 {(['casual', 'standard', 'high'] as const).map(tier => (
                   <button key={tier} onClick={() => setPrizeTier(tier)}
-                    style={{
-                      padding: '10px 16px',
-                      borderRadius: '10px',
-                      border: prizeTier === tier ? '1px solid rgba(0,229,255,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                      backgroundColor: prizeTier === tier ? 'rgba(0,229,255,0.08)' : 'transparent',
-                      color: prizeTier === tier ? '#00E5FF' : '#8B8BD4',
-                      cursor: 'pointer',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                    }}>
+                    style={{ padding: '10px 16px', borderRadius: '10px', border: prizeTier === tier ? '1px solid rgba(0,229,255,0.5)' : '1px solid rgba(255,255,255,0.1)', backgroundColor: prizeTier === tier ? 'rgba(0,229,255,0.08)' : 'transparent', color: prizeTier === tier ? '#00E5FF' : '#8B8BD4', cursor: 'pointer', fontSize: '13px', fontWeight: 600, textTransform: 'uppercase' }}>
                     {tier === 'casual' ? '50/10' : tier === 'standard' ? '100/25' : '500/100'}
                   </button>
                 ))}
@@ -109,9 +103,12 @@ function Lobby() {
           <span style={{ background: 'linear-gradient(to right, #FFD700, #8B8BD4, #5C5C9E)', backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent', backgroundSize: '200% 100%', backgroundPosition: '0% 50%' }}>BINGO</span>
         </motion.h1>
         <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.7, duration: 0.8 }}
-          style={{ fontSize: 'clamp(16px, 2vw, 20px)', color: '#5C5C9E', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '56px', fontWeight: 300 }}>
+          style={{ fontSize: 'clamp(16px, 2vw, 20px)', color: '#5C5C9E', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '16px', fontWeight: 300 }}>
           Enter the Void
         </motion.p>
+        <div style={{ marginBottom: '48px' }}>
+          <span style={{ fontSize: '18px', fontFamily: 'monospace', fontWeight: 700, color: '#FFD700' }}>{balance.toLocaleString()} NOX</span>
+        </div>
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1.0, duration: 0.8 }}
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
           <motion.button onClick={() => setMode('create')}

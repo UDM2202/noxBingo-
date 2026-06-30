@@ -42,6 +42,7 @@ function GameRoom() {
     return saved ? parseInt(saved) : 1000;
   });
   const [isHost] = useState(mode === 'create');
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const myPlayerId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -179,6 +180,16 @@ function GameRoom() {
   }
 
   function handleBackToLobby() {
+    if (phase === 'playing') {
+      setShowLeaveConfirm(true);
+      return;
+    }
+    if (isMultiplayer) multi.leaveRoom();
+    navigate('/');
+  }
+
+  function confirmLeave() {
+    setShowLeaveConfirm(false);
     if (isMultiplayer) multi.leaveRoom();
     navigate('/');
   }
@@ -325,9 +336,20 @@ function GameRoom() {
             playerName={playerName}
           />
         )}
-      </AnimatePresence>
-
-      <AudioSettings
+      {showLeaveConfirm && (
+  <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(11,11,69,0.9)', backdropFilter: 'blur(4px)' }}>
+    <div style={{ backgroundColor: '#1A1A5E', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '32px', maxWidth: '380px', textAlign: 'center' }}>
+      <p style={{ fontSize: '18px', fontWeight: 600, color: '#FFD700', marginBottom: '12px' }}>Leave Game?</p>
+      <p style={{ fontSize: '14px', color: '#8B8BD4', marginBottom: '24px' }}>Your game is still in progress. Are you sure you want to quit?</p>
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+        <button onClick={() => setShowLeaveConfirm(false)} style={{ padding: '10px 24px', border: '1px solid rgba(0,229,255,0.3)', borderRadius: '8px', color: '#00E5FF', background: 'rgba(0,229,255,0.1)', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>Stay</button>
+        <button onClick={confirmLeave} style={{ padding: '10px 24px', border: '1px solid rgba(255,100,100,0.3)', borderRadius: '8px', color: '#FF6464', background: 'rgba(255,100,100,0.1)', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>Leave</button>
+      </div>
+    </div>
+  </div>
+)}
+</AnimatePresence>
+<AudioSettings
         isOpen={showAudioSettings}
         onClose={() => setShowAudioSettings(false)}
         soundEnabled={soundEnabled}
@@ -341,6 +363,11 @@ function GameRoom() {
 }
 
 export default GameRoom;
+
+
+
+
+
 
 
 

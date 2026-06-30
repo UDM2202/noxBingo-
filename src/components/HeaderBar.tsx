@@ -67,10 +67,7 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, sound
 </div>
 <div className="h-6 w-px bg-white/8" />
 {balance !== undefined && (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-    <span style={{ fontSize: '10px', letterSpacing: '0.3em', textTransform: 'uppercase', color: '#5C5C9E', fontWeight: 500 }}>Balance</span>
-    <span style={{ fontSize: '16px', fontFamily: 'monospace', fontWeight: 700, color: '#FFD700' }}>{balance.toLocaleString()} NOX</span>
-  </div>
+  <span style={{ fontSize: '12px', fontFamily: 'monospace', fontWeight: 600, color: '#FFD700', opacity: 0.8 }}>{balance.toLocaleString()} NOX</span>
 )}
 {/* Right: Game Status */}
         <div className="flex items-center gap-8 pr-1">
@@ -232,4 +229,6 @@ function HeaderBar({ roomCode, ballsDrawn, totalBalls, isLive, isNearMiss, sound
 }
 
 export default HeaderBar;
+
+
 
