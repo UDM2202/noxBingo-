@@ -107,16 +107,16 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
         );
       })}
       <motion.div initial={{ scale: 0.5, opacity: 0, y: 40 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ delay: 0.3, type: 'spring', stiffness: 200, damping: 18 }}
-        style={{ position: 'relative', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
+        style={{ position: 'relative', maxWidth: '400px', overflowY: 'auto', maxHeight: '100vh', width: '100%', textAlign: 'center' }}>
         <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '160px', height: '160px', background: '#FFD700', borderRadius: '50%', filter: 'blur(80px)', opacity: 0.2, pointerEvents: 'none' }} />
         <motion.div initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5, duration: 0.6 }}
-          style={{ fontSize: '80px', marginBottom: '24px', position: 'relative' }}>
+          style={{ fontSize: 'clamp(48px, 15vw, 80px)', marginBottom: '24px', position: 'relative' }}>
           <motion.span style={{ display: 'inline-block' }} animate={{ y: [0, -8, 0], rotate: [0, -5, 5, -3, 0] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}>
             {isMultiplayerLoser ? clapEmoji : isNoWinner ? sparkleEmoji : isDoubleWin ? trophyEmoji + starEmoji : hasBingo ? trophyEmoji : starEmoji}
           </motion.span>
         </motion.div>
         <motion.h2 initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} transition={{ delay: 0.6, type: 'spring', stiffness: 300, damping: 15 }}
-          style={{ fontSize: '48px', fontWeight: 700, marginBottom: '16px' }}>
+          style={{ fontSize: 'clamp(28px, 8vw, 48px)', fontWeight: 700, marginBottom: '16px' }}>
           <span style={{ background: 'linear-gradient(to right, #FFD700, #fff3b0, #FFD700)', backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent', backgroundSize: '200% 100%' }}>
             {isMultiplayerLoser ? (winnerName || 'Opponent') + ' Wins!' : isNoWinner ? 'NO WINNER' : isDoubleWin ? 'DOUBLE WIN!' : hasBingo ? 'BINGO!' : 'NOX BONUS!'}
           </span>
@@ -170,6 +170,9 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
   );
 }
 export default VictoryOverlay;
+
+
+
 
 
 

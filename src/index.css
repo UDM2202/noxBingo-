@@ -62,6 +62,38 @@
   50% { border-color: var(--color-gold); }
 }
 
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  
+  
+  body {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 769px) {
+  html {
+    zoom: 80%;
+  }
+}
+
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  
+  
+  body {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 769px) {
+  html {
+    zoom: 80%;
+  }
+}
+
 *,
 *::before,
 *::after {
@@ -105,3 +137,5 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-neon-primary);
 }
+
+

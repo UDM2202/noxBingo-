@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
+﻿import { motion, AnimatePresence } from 'framer-motion';
 import { getLetterForNumber } from '../utils/gameLogic';
 
 interface QuantumCallerProps {
@@ -15,7 +15,7 @@ function QuantumCaller({ currentBall, isDrawing, isFrozen, winningCardIndex }: Q
     <div className="relative flex flex-col items-center pt-4">
       {/* Outer glow ring */}
       <motion.div
-        className="absolute w-48 h-48 md:w-56 md:h-56 rounded-full"
+        className="absolute w-36 h-36 md:w-48 md:h-48 rounded-full"
         animate={{
           boxShadow: isFrozen && winningCardIndex !== null
             ? [
@@ -40,7 +40,7 @@ function QuantumCaller({ currentBall, isDrawing, isFrozen, winningCardIndex }: Q
 
       {/* Main circle */}
       <motion.div
-        className="relative w-40 h-40 md:w-48 md:h-48 rounded-full flex items-center justify-center"
+        className="relative w-32 h-32 md:w-40 md:h-40 rounded-full flex items-center justify-center"
         style={{
           background: 'radial-gradient(circle at 30% 30%, rgba(0,229,255,0.1), rgba(11,11,69,0.9))',
           border: '2px solid rgba(0,240,255,0.15)',
@@ -118,7 +118,7 @@ function QuantumCaller({ currentBall, isDrawing, isFrozen, winningCardIndex }: Q
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: 'spring', stiffness: 200, damping: 10 }}
             >
-              <span className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-gold via-yellow-200 to-gold bg-clip-text text-transparent tracking-tight">
+              <span className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-gold via-yellow-200 to-gold bg-clip-text text-transparent tracking-tight">
                 BINGO!
               </span>
             </motion.div>
@@ -139,7 +139,7 @@ function QuantumCaller({ currentBall, isDrawing, isFrozen, winningCardIndex }: Q
             >
               {/* Letter */}
               <motion.div
-                className="text-sm md:text-base font-bold tracking-[0.3em] text-neon-primary/70 mb-1"
+                className="text-xs md:text-sm font-bold tracking-[0.3em] text-neon-primary/70 mb-1"
                 initial={{ y: -10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.1, duration: 0.2 }}
@@ -149,7 +149,7 @@ function QuantumCaller({ currentBall, isDrawing, isFrozen, winningCardIndex }: Q
 
               {/* Number */}
               <motion.div
-                className="text-4xl md:text-5xl font-bold font-mono text-white tabular-nums"
+                className="text-3xl md:text-4xl font-bold font-mono text-white tabular-nums"
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.15, duration: 0.2 }}
@@ -183,3 +183,4 @@ function QuantumCaller({ currentBall, isDrawing, isFrozen, winningCardIndex }: Q
 }
 
 export default QuantumCaller;
+

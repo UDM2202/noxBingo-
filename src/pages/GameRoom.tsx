@@ -12,6 +12,7 @@ import VictoryOverlay from '../components/VictoryOverlay';
 import CountdownOverlay from '../components/CountdownOverlay';
 import AudioSettings from '../components/AudioSettings';
 import { useAudio } from '../hooks/useAudio';
+import { useAuth } from '../hooks/useAuth';
 import { getLetterForNumber } from '../utils/gameLogic';
 
 function GameRoom() {
@@ -30,6 +31,7 @@ function GameRoom() {
   const [victoryPhase, setVictoryPhase] = useState<'winning-cell' | 'card-scale' | 'caller-freeze' | 'overlay' | null>(null);
   const victoryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { play, speakNumber, soundEnabled, toggleSound, voicePreset, changeVoice, previewVoice } = useAudio();
+  const { saveGameResult, getBalance } = useAuth();
 
   const prevDrawIndex = useRef(-1);
   const prevPhase = useRef(soloState.phase);
@@ -38,9 +40,19 @@ function GameRoom() {
 
   const isMultiplayer = mode === 'create' || mode === 'join';
   const [balance, setBalance] = useState(() => {
-    const saved = localStorage.getItem('noxbingo-balance');
-    return saved ? parseInt(saved) : 1000;
+    // Load from DB async - start with localStorage fallback
+    return 1000;
   });
+  useEffect(() => {
+    getBalance().then(bal => setBalance(bal));
+  }, []);
+  
+
+  useEffect(() => {
+    getBalance().then(bal => setBalance(bal));
+  }, []);
+
+  
   const [isHost] = useState(mode === 'create');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const myPlayerId = useRef<string | null>(null);
@@ -138,8 +150,16 @@ function GameRoom() {
       const hasWin = winningCardIndex !== null || bonusWinner !== null;
       if (hasWin) {
       play('win');
-      if (winningCardIndex !== null) updateBalance(100);
-      if (bonusWinner !== null) updateBalance(25);
+      if (winningCardIndex !== null) {
+        updateBalance(100);
+        saveGameResult('win', 100, displayRoomCode || 'solo', mode);
+      }
+      if (bonusWinner !== null) {
+        updateBalance(25);
+        saveGameResult('bonus', 25, displayRoomCode || 'solo', mode);
+      }
+    } else if (phase === 'finished') {
+      saveGameResult('loss', 0, displayRoomCode || 'solo', mode);
     }
     }
     prevPhase.current = phase;
@@ -260,7 +280,7 @@ function GameRoom() {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5 }}
             >
-              <div style={{ marginBottom: '20px' }}>
+              <div style={{ marginBottom: '12px' }}>
                 <QuantumCaller
                   currentBall={currentBall}
                   isDrawing={phase === 'playing'}
@@ -269,14 +289,14 @@ function GameRoom() {
                 />
               </div>
               {drawnBalls.length > 0 && (
-                <div style={{ marginBottom: '16px' }}>
+                <div style={{ marginBottom: '10px' }}>
                   <DrawnSequence balls={drawnBalls} />
                 </div>
               )}
             </motion.div>
 
             <motion.div
-              className="flex justify-center gap-4 px-2 flex-wrap w-full"
+              className="flex justify-center gap-3 px-1 flex-wrap w-full"
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -363,6 +383,14 @@ function GameRoom() {
 }
 
 export default GameRoom;
+
+
+
+
+
+
+
+
 
 
 

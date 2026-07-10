@@ -2,6 +2,10 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { useAudio } from '../hooks/useAudio';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
+import { useEffect } from 'react';
+
 function Lobby() {
   const navigate = useNavigate();
   const [isInitiating, setIsInitiating] = useState(false);
@@ -10,10 +14,29 @@ function Lobby() {
   const [mode, setMode] = useState<'select' | 'create' | 'join'>('select');
   const [prizeTier, setPrizeTier] = useState('standard');
   const { play } = useAudio();
+  const { user, loading, signOut } = useAuth();
+  const [username, setUsername] = useState('');
   const [balance] = useState(() => {
     const saved = localStorage.getItem('noxbingo-balance');
     return saved ? parseInt(saved) : 1000;
   });
+
+  useEffect(() => {
+    if (user) {
+      supabase.from('profiles').select('username').eq('id', user.id).single().then(({ data }) => {
+        if (data) setUsername(data.username);
+      });
+    }
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '40px', height: '40px', border: '2px solid #00E5FF', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      </div>
+    );
+  }
+
   function handleCreateRoom() {
     if (!playerName.trim()) return;
     setIsInitiating(true);
@@ -22,6 +45,7 @@ function Lobby() {
       navigate('/room/new?mode=create&name=' + encodeURIComponent(playerName) + '&prize=' + prizeTier);
     }, 600);
   }
+
   function handleJoinRoom() {
     if (!playerName.trim() || !roomCode.trim()) return;
     setIsInitiating(true);
@@ -30,6 +54,7 @@ function Lobby() {
       navigate('/room/' + roomCode.toUpperCase() + '?mode=join&name=' + encodeURIComponent(playerName));
     }, 600);
   }
+
   if (mode === 'create' || mode === 'join') {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
@@ -91,6 +116,7 @@ function Lobby() {
       </div>
     );
   }
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       <div style={{ position: 'absolute', top: '33%', left: '50%', transform: 'translate(-50%, -50%)', width: '600px', height: '300px', background: '#00E5FF', borderRadius: '50%', filter: 'blur(120px)', opacity: 0.04, pointerEvents: 'none' }} />
@@ -99,34 +125,60 @@ function Lobby() {
           style={{ width: '96px', height: '1px', margin: '0 auto 32px', background: 'linear-gradient(90deg, transparent, #00E5FF, #FFD700, #00E5FF, transparent)' }} />
         <motion.h1 initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4, duration: 0.8, ease: 'easeOut' }}
           style={{ fontSize: 'clamp(60px, 8vw, 120px)', fontWeight: 700, letterSpacing: '-0.03em', marginBottom: '16px' }}>
-          <span style={{ background: 'linear-gradient(to right, #5C5C9E, #8B8BD4, #FFD700)', backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent', backgroundSize: '200% 100%', backgroundPosition: '0% 50%' }}>NOX</span>
-          <span style={{ background: 'linear-gradient(to right, #FFD700, #8B8BD4, #5C5C9E)', backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent', backgroundSize: '200% 100%', backgroundPosition: '0% 50%' }}>BINGO</span>
+          <span style={{ background: 'linear-gradient(to right, #5C5C9E, #8B8BD4, #FFD700)', backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent' }}>NOX</span>
+          <span style={{ background: 'linear-gradient(to right, #FFD700, #8B8BD4, #5C5C9E)', backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent' }}>BINGO</span>
         </motion.h1>
         <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.7, duration: 0.8 }}
           style={{ fontSize: 'clamp(16px, 2vw, 20px)', color: '#5C5C9E', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '16px', fontWeight: 300 }}>
           Enter the Void
         </motion.p>
-        <div style={{ marginBottom: '48px' }}>
-          <span style={{ fontSize: '18px', fontFamily: 'monospace', fontWeight: 700, color: '#FFD700' }}>{balance.toLocaleString()} NOX</span>
-        </div>
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1.0, duration: 0.8 }}
-          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-          <motion.button onClick={() => setMode('create')}
-            style={{ padding: '16px 56px', fontSize: '16px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', backgroundColor: '#1A1A5E', border: '1px solid rgba(0,229,255,0.5)', borderRadius: '12px', color: '#00E5FF', cursor: 'pointer' }}
-            whileHover={{ scale: 1.02, boxShadow: '0 0 24px rgba(0,229,255,0.2)' }} whileTap={{ scale: 0.98 }}>
-            Create Room
-          </motion.button>
-          <motion.button onClick={() => setMode('join')}
-            style={{ padding: '16px 56px', fontSize: '16px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', backgroundColor: 'transparent', border: '1px solid rgba(255,215,0,0.4)', borderRadius: '12px', color: '#FFD700', cursor: 'pointer' }}
-            whileHover={{ scale: 1.02, boxShadow: '0 0 24px rgba(255,215,0,0.15)' }} whileTap={{ scale: 0.98 }}>
-            Join Room
-          </motion.button>
-          <motion.button onClick={() => navigate('/room/new?mode=solo')}
-            style={{ padding: '14px 44px', fontSize: '15px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', color: '#B8B8E8', cursor: 'pointer', marginTop: '12px' }}
-            whileHover={{ scale: 1.02, borderColor: 'rgba(184,184,232,0.5)', color: '#D0D0F0' }} whileTap={{ scale: 0.98 }}>
-            Play Solo
-          </motion.button>
-        </motion.div>
+
+        {user ? (
+          <>
+            <div style={{ marginBottom: '24px' }}>
+              <span style={{ fontSize: '14px', color: '#8B8BD4' }}>Welcome, {username || user.email}
+            <button onClick={signOut} style={{ marginLeft: '12px', padding: '4px 12px', fontSize: '11px', color: '#FF6464', background: 'rgba(255,100,100,0.1)', border: '1px solid rgba(255,100,100,0.2)', borderRadius: '6px', cursor: 'pointer' }}>Sign Out</button>
+            <button onClick={signOut} style={{ marginLeft: '12px', padding: '4px 12px', fontSize: '11px', color: '#FF6464', background: 'rgba(255,100,100,0.1)', border: '1px solid rgba(255,100,100,0.2)', borderRadius: '6px', cursor: 'pointer' }}>Sign Out</button></span>
+            </div>
+            <div style={{ marginBottom: '48px' }}>
+              <span style={{ fontSize: '18px', fontFamily: 'monospace', fontWeight: 700, color: '#FFD700' }}>{balance.toLocaleString()} NOX</span>
+            </div>
+            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1.0, duration: 0.8 }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              <motion.button onClick={() => setMode('create')}
+                style={{ padding: '16px 56px', fontSize: '16px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', backgroundColor: '#1A1A5E', border: '1px solid rgba(0,229,255,0.5)', borderRadius: '12px', color: '#00E5FF', cursor: 'pointer' }}
+                whileHover={{ scale: 1.02, boxShadow: '0 0 24px rgba(0,229,255,0.2)' }} whileTap={{ scale: 0.98 }}>
+                Create Room
+              </motion.button>
+              <motion.button onClick={() => setMode('join')}
+                style={{ padding: '16px 56px', fontSize: '16px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', backgroundColor: 'transparent', border: '1px solid rgba(255,215,0,0.4)', borderRadius: '12px', color: '#FFD700', cursor: 'pointer' }}
+                whileHover={{ scale: 1.02, boxShadow: '0 0 24px rgba(255,215,0,0.15)' }} whileTap={{ scale: 0.98 }}>
+                Join Room
+              </motion.button>
+              <motion.button onClick={() => navigate('/room/new?mode=solo')}
+                style={{ padding: '14px 44px', fontSize: '15px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', color: '#B8B8E8', cursor: 'pointer', marginTop: '12px' }}
+                whileHover={{ scale: 1.02, borderColor: 'rgba(184,184,232,0.5)', color: '#D0D0F0' }} whileTap={{ scale: 0.98 }}>
+                Play Solo
+              </motion.button>
+            </motion.div>
+          </>
+        ) : (
+          <div style={{ marginBottom: '48px' }}>
+            <p style={{ color: '#8B8BD4', fontSize: '16px', marginBottom: '24px' }}>Sign in to create and join rooms</p>
+            <motion.button onClick={() => navigate('/auth')}
+              style={{ padding: '14px 48px', fontSize: '15px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', backgroundColor: '#1A1A5E', border: '1px solid rgba(0,229,255,0.5)', borderRadius: '12px', color: '#00E5FF', cursor: 'pointer', marginBottom: '16px' }}
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              Sign In
+            </motion.button>
+            <div>
+              <button onClick={() => navigate('/room/new?mode=solo')}
+                style={{ padding: '12px 36px', fontSize: '14px', fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', color: '#8B8BD4', cursor: 'pointer' }}>
+                Play as Guest
+              </button>
+            </div>
+          </div>
+        )}
+
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4, duration: 0.8 }}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', marginTop: '80px', fontSize: '11px', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#5C5C9E' }}><span style={{ width: '4px', height: '4px', backgroundColor: 'rgba(0,229,255,0.5)', borderRadius: '50%' }} />75-Ball</span>
@@ -140,4 +192,10 @@ function Lobby() {
     </div>
   );
 }
+
 export default Lobby;
+
+
+
+
+

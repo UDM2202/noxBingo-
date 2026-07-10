@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+﻿import { motion } from 'framer-motion';
 import type { BingoCard } from '../types/game';
 
 const COLUMN_HEADERS = ['B', 'I', 'N', 'G', 'O'] as const;
@@ -31,7 +31,7 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
       `}
      style={{
   background: 'linear-gradient(145deg, rgba(26,26,94,0.95), rgba(18,18,77,0.98))',
-  padding: '16px',
+  padding: '10px',
   boxShadow: '0 4px 24px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.03) inset',
 }}
       animate={
@@ -151,7 +151,7 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                     {typeof cell.value === 'number' ? cell.value : ''}
                   </motion.span>
                 )}
-                  {/* Nox cell circle — unmarked */}
+                  {/* Nox cell circle â€” unmarked */}
                   {isNoxCell && !isNoxHit && !isMarked && (
                     <motion.div
                       className="absolute inset-2 rounded-full pointer-events-none"
@@ -168,7 +168,7 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                     />
 )}
 
-                                    {/* Nox cell circle — marked, bonus active */}
+                                    {/* Nox cell circle â€” marked, bonus active */}
                     {isNoxCell && !isNoxHit && isMarked && (
                       <motion.div
                         className="absolute inset-2 rounded-full pointer-events-none"
@@ -300,7 +300,7 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
             animate={{ opacity: [0.4, 0.8, 0.4] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
-            ✦ Nox Bonus Active ✦
+            âœ¦ Nox Bonus Active âœ¦
           </motion.span>
         </motion.div>
       )}
@@ -309,3 +309,4 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
 }
 
 export default HoloCard;
+
