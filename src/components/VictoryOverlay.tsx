@@ -12,8 +12,12 @@ interface VictoryOverlayProps {
   isMultiplayerLoser?: boolean;
   winnerName?: string | null;
   playerName?: string;
+  // Automatic on-chain payout status, pushed by the server once the
+  // treasury sends OREN to the winner's wallet.
+  payoutSignature?: string | null;
+  payoutError?: string | null;
 }
-function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutError }: VictoryOverlayProps) {
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
   const [viewingCards, setViewingCards] = useState(false);
@@ -22,6 +26,9 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
   const hasBonus = bonusCardIndex !== null;
   const isDoubleWin = hasBingo && hasBonus;
   const isNoWinner = !hasBingo && !hasBonus;
+  // Only the actual multiplayer bingo winner gets a real on-chain
+  // payout (nox-bonus-only isn't wired to a payout).
+  const showPayoutStatus = isMultiplayerWinner && hasBingo;
   useEffect(() => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let iterations = 0;
@@ -55,6 +62,7 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
   const trophyEmoji = '\uD83C\uDFC6';
   const starEmoji = '\u2728';
   const eyeEmoji = '\uD83D\uDC41';
+  const coinEmoji = '\uD83E\uDE99';
   if (viewingCards) {
     const card = cards[currentViewCard];
     const isWinner = currentViewCard === winningCardIndex;
@@ -135,6 +143,45 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
             {hasBonus && <motion.p animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 2, repeat: Infinity }} style={{ fontSize: '18px', fontWeight: 600, color: '#00E5FF', marginTop: '4px' }}>+25 NOX Bonus</motion.p>}
           </motion.div>
         )}
+
+        {showPayoutStatus && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }}
+            style={{
+              marginBottom: '24px',
+              padding: '16px',
+              borderRadius: '12px',
+              background: 'rgba(0,229,255,0.06)',
+              border: '1px solid rgba(0,229,255,0.25)',
+            }}>
+            {payoutSignature ? (
+              <>
+                <p style={{ color: '#00FF88', fontWeight: 700, fontSize: '15px', marginBottom: '6px' }}>
+                  {coinEmoji} Prize sent to your wallet!
+                </p>
+                <a
+                  href={'https://explorer.solana.com/tx/' + payoutSignature + '?cluster=devnet'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#00E5FF', fontSize: '12px', wordBreak: 'break-all', textDecoration: 'underline' }}
+                >
+                  View transaction
+                </a>
+              </>
+            ) : payoutError ? (
+              <p style={{ color: '#FF6464', fontSize: '13px' }}>{payoutError}</p>
+            ) : (
+              <p style={{ color: '#8B8BD4', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <motion.span
+                  style={{ width: '8px', height: '8px', backgroundColor: '#00E5FF', borderRadius: '50%' }}
+                  animate={{ opacity: [0.3, 1, 0.3] }}
+                  transition={{ duration: 1.2, repeat: Infinity }}
+                />
+                Sending your prize…
+              </p>
+            )}
+          </motion.div>
+        )}
+
         <motion.button onClick={() => openCardViewer(hasBingo ? winningCardIndex! : 0)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}
           style={{ padding: '10px 24px', border: '1px solid rgba(255,215,0,0.4)', borderRadius: '8px', color: '#FFD700', background: 'rgba(255,215,0,0.08)', cursor: 'pointer', fontWeight: 600, fontSize: '14px', letterSpacing: '0.05em', marginBottom: '24px' }}
           whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
@@ -170,9 +217,3 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
   );
 }
 export default VictoryOverlay;
-
-
-
-
-
-

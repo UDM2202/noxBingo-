@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useWallet } from '@solana/wallet-adapter-react'
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useGameReducer } from '../hooks/useGameReducer';
 import { useDrawLoop } from '../hooks/useDrawLoop';
 import { useMultiplayer } from '../hooks/useMultiplayer';
@@ -13,6 +15,8 @@ import CountdownOverlay from '../components/CountdownOverlay';
 import AudioSettings from '../components/AudioSettings';
 import { useAudio } from '../hooks/useAudio';
 import { useAuth } from '../hooks/useAuth';
+import { useSolanaContract } from '../hooks/useSolanaContract';
+import { CARD_BUNDLES } from '../utils/cardBundles';
 import { getLetterForNumber } from '../utils/gameLogic';
 
 function GameRoom() {
@@ -25,6 +29,11 @@ function GameRoom() {
 
   const { state: soloState, dispatch, deployCards } = useGameReducer();
   const multi = useMultiplayer();
+  const { publicKey } = useWallet();
+  const { payEntryFee } = useSolanaContract();
+  const [payingFee, setPayingFee] = useState(false);
+  const [feeError, setFeeError] = useState<string | null>(null);
+  const [selectedBundleId, setSelectedBundleId] = useState<string>(CARD_BUNDLES[0].id);
 
   const [showVictory, setShowVictory] = useState(false);
   const [showAudioSettings, setShowAudioSettings] = useState(false);
@@ -37,6 +46,7 @@ function GameRoom() {
   const prevPhase = useRef(soloState.phase);
   const hasPlayedGameStart = useRef(false);
   const hasConnected = useRef(false);
+  const hasSyncedWallet = useRef(false);
 
   const isMultiplayer = mode === 'create' || mode === 'join';
   const [balance, setBalance] = useState(() => {
@@ -58,16 +68,37 @@ function GameRoom() {
   const myPlayerId = useRef<string | null>(null);
 
   useEffect(() => {
+    if (isMultiplayer && multi.error && multi.phase === 'idle' && multi.roomCode === null && hasConnected.current) {
+      // roomCode/phase getting reset alongside an error message means
+      // we were removed (kicked or wallet-timed-out), not just a
+      // normal in-room error — bounce back to the home screen.
+      const timer = setTimeout(() => navigate('/'), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [isMultiplayer, multi.error, multi.phase, multi.roomCode, navigate]);
+
+  useEffect(() => {
     if (isMultiplayer && !hasConnected.current) {
       hasConnected.current = true;
+      const wallet = publicKey?.toBase58() || null;
       // Connection is automatic - just wait and send the command
       if (mode === 'create') {
-        setTimeout(() => multi.createRoom(playerName), 800);
+        setTimeout(() => multi.createRoom(playerName, wallet), 800);
       } else if (mode === 'join' && roomCode) {
-        setTimeout(() => multi.joinRoom(roomCode, playerName), 800);
+        setTimeout(() => multi.joinRoom(roomCode, playerName, wallet), 800);
       }
     }
-  }, [isMultiplayer, mode, roomCode, playerName]);
+  }, [isMultiplayer, mode, roomCode, playerName, publicKey]);
+
+  // If the wallet connects after the room's already been created/joined,
+  // push the address up once it lands — needed so the server knows
+  // where to send a payout if this player wins.
+  useEffect(() => {
+    if (isMultiplayer && publicKey && multi.playerId && !hasSyncedWallet.current) {
+      hasSyncedWallet.current = true;
+      multi.setWallet(publicKey.toBase58());
+    }
+  }, [isMultiplayer, publicKey, multi.playerId]);
 
   useEffect(() => {
     if (!isMultiplayer && roomCode === 'new') {
@@ -106,6 +137,9 @@ function GameRoom() {
   const winningCardIndex = isMultiplayer
     ? (multi.winningPlayerId === multi.playerId ? multi.cardIndex : null)
     : soloState.winningCardIndex;
+  const totalBonusAmount = isMultiplayer 
+    ? multi.bonusAmounts.reduce((sum, a) => sum + a, 0)
+    : 25;
   const bonusWinner = isMultiplayer
     ? (multi.bonusWinnerId === multi.playerId ? 0 : null)
     : soloState.bonusWinner;
@@ -155,7 +189,7 @@ function GameRoom() {
         saveGameResult('win', 100, displayRoomCode || 'solo', mode);
       }
       if (bonusWinner !== null) {
-        updateBalance(25);
+        updateBalance(totalBonusAmount);
         saveGameResult('bonus', 25, displayRoomCode || 'solo', mode);
       }
     } else if (phase === 'finished') {
@@ -218,6 +252,22 @@ function GameRoom() {
     multi.startGame();
   }
 
+  async function handlePayEntryFee() {
+    const bundle = CARD_BUNDLES.find(b => b.id === selectedBundleId);
+    if (!bundle) return;
+    setFeeError(null);
+    setPayingFee(true);
+    try {
+      const signature = await payEntryFee(bundle.priceOren);
+      multi.submitEntryFee(signature, bundle.id);
+    } catch (err) {
+      console.error('payEntryFee failed:', err);
+      setFeeError('Payment failed or was rejected. Check your OREN balance and try again.');
+    } finally {
+      setPayingFee(false);
+    }
+  }
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <AnimatePresence>
@@ -244,30 +294,137 @@ function GameRoom() {
             <div className="flex flex-col gap-2 items-center">
               <p className="text-[#5C5C9E] text-sm uppercase tracking-wider">Players</p>
               {multi.players.map(p => (
-                <p key={p.id} className="text-white text-lg">{p.name} {p.id === (myPlayerId.current || multi.playerId) ? '(You)' : ''}</p>
+                <p key={p.id} className="text-white text-lg flex items-center gap-2">
+                  {p.name} {p.id === (myPlayerId.current || multi.playerId) ? '(You)' : ''}
+                  {!p.walletAddress && (
+                    <span style={{ color: '#5C5C9E', fontSize: '12px' }}>(no wallet)</span>
+                  )}
+                  {p.walletAddress && !p.paidEntryFee && (
+                    <span style={{ color: '#FFD700', fontSize: '12px' }}>(unpaid)</span>
+                  )}
+                  {p.paidEntryFee && (
+                    <span style={{ color: '#00E5FF', fontSize: '12px' }}>
+                      ({p.cardCount} card{p.cardCount === 1 ? '' : 's'})
+                    </span>
+                  )}
+                  {isHost && p.id !== (myPlayerId.current || multi.playerId) && (
+                    <button
+                      onClick={() => multi.removePlayer(p.id)}
+                      style={{ fontSize: '11px', color: '#FF6464', background: 'rgba(255,100,100,0.1)', border: '1px solid rgba(255,100,100,0.3)', borderRadius: '6px', padding: '2px 8px', cursor: 'pointer' }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </p>
               ))}
             </div>
-            {isHost && (
-              <motion.button
-                onClick={handleStartGame}
-                style={{
-                  padding: '14px 40px',
-                  fontSize: '16px',
-                  fontWeight: 600,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  backgroundColor: '#1A1A5E',
-                  border: '1px solid rgba(0,229,255,0.5)',
-                  borderRadius: '12px',
-                  color: '#00E5FF',
-                  cursor: 'pointer',
-                }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Start Game
-              </motion.button>
+
+            <div className="flex flex-col items-center gap-2">
+              <WalletMultiButton />
+              {!publicKey && (
+                <p style={{ color: '#8B8BD4', fontSize: '12px', textAlign: 'center', maxWidth: '260px' }}>
+                  Connect a Solana wallet to play. You'll be removed from the room if you don't connect within 90 seconds.
+                </p>
+              )}
+            </div>
+
+            {publicKey && !(multi.players.find(p => p.id === (myPlayerId.current || multi.playerId))?.paidEntryFee) && (
+              <div className="flex flex-col items-center gap-3">
+                <p style={{ color: '#5C5C9E', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Choose your cards
+                </p>
+                <div className="flex gap-2">
+                  {CARD_BUNDLES.map(bundle => {
+                    const isSelected = bundle.id === selectedBundleId;
+                    return (
+                      <button
+                        key={bundle.id}
+                        onClick={() => setSelectedBundleId(bundle.id)}
+                        style={{
+                          padding: '12px 16px',
+                          borderRadius: '10px',
+                          border: isSelected ? '2px solid #FFD700' : '1px solid rgba(255,255,255,0.15)',
+                          background: isSelected ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.03)',
+                          color: isSelected ? '#FFD700' : '#8B8BD4',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          minWidth: '90px',
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, fontSize: '14px' }}>{bundle.label}</div>
+                        <div style={{ fontSize: '13px', marginTop: '4px' }}>{bundle.priceOren} OREN</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <motion.button
+                  onClick={handlePayEntryFee}
+                  disabled={payingFee}
+                  style={{
+                    padding: '12px 32px',
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                    backgroundColor: 'rgba(255,215,0,0.1)',
+                    border: '1px solid rgba(255,215,0,0.4)',
+                    borderRadius: '10px',
+                    color: '#FFD700',
+                    cursor: payingFee ? 'wait' : 'pointer',
+                    opacity: payingFee ? 0.6 : 1,
+                  }}
+                  whileHover={{ scale: payingFee ? 1 : 1.03 }}
+                  whileTap={{ scale: payingFee ? 1 : 0.97 }}
+                >
+                  {payingFee ? 'Sending…' : `Pay ${CARD_BUNDLES.find(b => b.id === selectedBundleId)?.priceOren ?? ''} OREN`}
+                </motion.button>
+                {(feeError || multi.entryFeeError) && (
+                  <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>
+                    {feeError || multi.entryFeeError}
+                  </p>
+                )}
+                <p style={{ color: '#8B8BD4', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>
+                  You'll be removed from the room if you don't pay within 90 seconds of connecting.
+                </p>
+              </div>
             )}
+
+            {(() => {
+              const notReady = multi.players.filter(p => !p.walletAddress || !p.paidEntryFee);
+              const allReady = notReady.length === 0;
+              return (
+                <>
+                  {!allReady && (
+                    <p style={{ color: '#FFD700', fontSize: '13px', textAlign: 'center', maxWidth: '320px' }}>
+                      Waiting on {notReady.map(p => p.name).join(', ')} to connect a wallet and pay for{' '}
+                      cards — the game can't start until everyone has.
+                    </p>
+                  )}
+                  {isHost && (
+                    <motion.button
+                      onClick={handleStartGame}
+                      disabled={!allReady}
+                      style={{
+                        padding: '14px 40px',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        backgroundColor: '#1A1A5E',
+                        border: '1px solid rgba(0,229,255,0.5)',
+                        borderRadius: '12px',
+                        color: allReady ? '#00E5FF' : '#3A3A6E',
+                        cursor: allReady ? 'pointer' : 'not-allowed',
+                        opacity: allReady ? 1 : 0.5,
+                      }}
+                      whileHover={{ scale: allReady ? 1.02 : 1 }}
+                      whileTap={{ scale: allReady ? 0.98 : 1 }}
+                    >
+                      Start Game
+                    </motion.button>
+                  )}
+                </>
+              );
+            })()}
             {multi.error && <p className="text-red-400 text-sm">{multi.error}</p>}
           </div>
         )}
@@ -334,8 +491,14 @@ function GameRoom() {
         {isMultiplayer && phase === 'idle' && (
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
-              <div className="w-16 h-16 border-2 border-neon-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-[#5C5C9E] tracking-wider uppercase text-sm">Connecting...</p>
+              {multi.error ? (
+                <p style={{ color: '#FF6464', fontSize: '15px', maxWidth: '280px' }}>{multi.error}</p>
+              ) : (
+                <>
+                  <div className="w-16 h-16 border-2 border-neon-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                  <p className="text-[#5C5C9E] tracking-wider uppercase text-sm">Connecting...</p>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -354,6 +517,10 @@ function GameRoom() {
             isMultiplayerLoser={isMultiplayerLoser}
             winnerName={winnerName}
             playerName={playerName}
+            /* Payout is server-initiated and automatic — these just
+               reflect status as it comes in over the socket. */
+            payoutSignature={multi.payoutSignature}
+            payoutError={multi.payoutError}
           />
         )}
       {showLeaveConfirm && (
@@ -383,37 +550,3 @@ function GameRoom() {
 }
 
 export default GameRoom;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
