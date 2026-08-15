@@ -32,11 +32,21 @@ export interface Player {
   name: string;
   cards: BingoCard[];
   connected: boolean;
+  // Connected Solana wallet — where prize payouts get sent, and where
+  // the entry fee payment must come from.
+  walletAddress: string | null;
+  // True only once the server has independently verified this
+  // player's bundle payment on-chain — never set from a client's say-so.
+  paidEntryFee: boolean;
+  // Which bundle they paid for, and how many cards that entitles them
+  // to. Both are derived server-side from the verified bundleId at
+  // payment time — never trust a client-supplied cardCount directly.
+  bundleId: string | null;
+  cardCount: number;
+  amountPaidOren: number;
 }
 
 export interface Room {
-  bingoPrize: number;
-  noxPrize: number;
   code: string;
   hostId: string;
   players: Map<string, Player>;
@@ -49,7 +59,7 @@ export interface Room {
 }
 
 export type ServerMessage =
-  | { type: 'room_created'; roomCode: string; playerId: string; hostId?: string; bingoPrize?: number; noxPrize?: number }
+  | { type: 'room_created'; roomCode: string; playerId: string; hostId?: string }
   | { type: 'player_joined'; playerId: string; playerName: string; playerCount: number }
   | { type: 'player_left'; playerId: string; playerName: string; playerCount: number }
   | { type: 'game_starting'; countdown: number }
@@ -58,18 +68,32 @@ export type ServerMessage =
   | { type: 'bingo'; winnerId: string; winnerName: string; cardIndex: number }
   | { type: 'nox_bonus'; winnerId: string; winnerName: string; cardIndex: number }
   | { type: 'game_over'; winnerId: string | null; winnerName: string | null }
+  // Sent once the server has actually sent OREN to the winner's wallet.
+  | { type: 'payout_sent'; winnerId: string; txSignature: string; amount: number }
+  | { type: 'payout_error'; message: string }
+  | { type: 'entry_fee_confirmed'; playerId: string; cardCount: number }
+  | { type: 'entry_fee_rejected'; message: string }
+  | { type: 'removed_from_room'; reason: 'wallet_timeout' | 'fee_timeout' | 'host_removed' }
   | { type: 'error'; message: string }
-  | { type: 'players_update'; players: { id: string; name: string }[]; hostId?: string | null };
+  | {
+      type: 'players_update';
+      players: {
+        id: string;
+        name: string;
+        walletAddress: string | null;
+        paidEntryFee: boolean;
+        bundleId: string | null;
+        cardCount: number;
+      }[];
+      hostId?: string | null;
+    };
 
 export type ClientMessage =
-  | { type: 'create_room'; playerName: string; prizeTier?: string }
-  | { type: 'join_room'; roomCode: string; playerName: string }
+  | { type: 'create_room'; playerName: string; walletAddress?: string }
+  | { type: 'join_room'; roomCode: string; playerName: string; walletAddress?: string }
+  | { type: 'set_wallet'; walletAddress: string }
+  | { type: 'submit_entry_fee'; txSignature: string; bundleId: string }
+  | { type: 'remove_player'; playerId: string }
   | { type: 'start_game' }
   | { type: 'claim_bingo'; cardIndex: number }
   | { type: 'leave_room' };
-
-
-
-
-
-
