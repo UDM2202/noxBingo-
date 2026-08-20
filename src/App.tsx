@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
-import AnimatedBackground from './types/components/AnimatedBackground'
+import AnimatedBackground from './components/AnimatedBackground'
 import Lobby from './pages/Lobby'
 import Auth from './pages/Auth'
 import Leaderboard from './pages/Leaderboard'

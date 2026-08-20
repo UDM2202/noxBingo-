@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi'
 import { useAudio } from '../hooks/useAudio'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { WalletButton } from '../types/components/WalletButton'
+import { WalletButton } from '../components/WalletButton'
 import { usePolygonContract } from '../hooks/usePolygonContract'
 
 function Lobby() {
