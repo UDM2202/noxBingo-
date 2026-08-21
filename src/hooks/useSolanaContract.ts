@@ -7,7 +7,7 @@ import {
 } from '@solana/spl-token';
 import { useState } from 'react';
 
-const OREN_MINT = new PublicKey('6EqY4SZKesXPzVJD3BhdFszYqnossy6t1gU43GSBqkQs');
+const OREN_MINT = new PublicKey('FvR82vvRtXmWKJXW5MUGVFLcLoRebfq3BasiYYRTD2JE');
 // Same address the server pays winners from — public knowledge, safe
 // to hardcode (it's just where the money goes, not a secret).
 export const TREASURY_WALLET = new PublicKey('Gahk26BjGG5BQR8AbRVwb3CSTh5rJquyZxN4cHR44sVz');
