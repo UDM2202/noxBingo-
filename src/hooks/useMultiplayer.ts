@@ -17,6 +17,7 @@ type MultiplayerState = {
   roomCode: string | null;
   playerId: string | null;
   hostId: string | null;
+  maxPlayers: number;
   players: PlayerInfo[];
   phase: 'idle' | 'lobby' | 'countdown' | 'playing' | 'finished';
   cards: BingoCard[];
@@ -45,6 +46,7 @@ export function useMultiplayer() {
     roomCode: null,
     playerId: null,
     hostId: null,
+    maxPlayers: 6,
     players: [],
     phase: 'idle',
     cards: [],
@@ -84,12 +86,18 @@ export function useMultiplayer() {
               roomCode: message.roomCode,
               playerId: message.playerId,
               hostId: message.hostId || prev.hostId,
+              maxPlayers: message.maxPlayers ?? prev.maxPlayers,
               phase: 'lobby',
             };
           case 'player_joined':
           case 'player_left':
           case 'players_update':
-            return { ...prev, players: message.players || prev.players, hostId: message.hostId || prev.hostId };
+            return {
+              ...prev,
+              players: message.players || prev.players,
+              hostId: message.hostId || prev.hostId,
+              maxPlayers: message.maxPlayers ?? prev.maxPlayers,
+            };
           case 'cards_dealt':
             return { ...prev, cards: message.cards, phase: 'playing', currentBall: null, drawnBalls: [] };
           case 'ball_drawn':
@@ -147,8 +155,8 @@ export function useMultiplayer() {
       ws.onopen = () => ws.send(JSON.stringify(payload));
     }
   };
-  const createRoom = useCallback((playerName: string, walletAddress?: string | null) => {
-    sendWhenReady({ type: 'create_room', playerName, walletAddress });
+  const createRoom = useCallback((playerName: string, walletAddress?: string | null, maxPlayers?: number) => {
+    sendWhenReady({ type: 'create_room', playerName, walletAddress, maxPlayers });
   }, []);
   const joinRoom = useCallback((roomCode: string, playerName: string, walletAddress?: string | null) => {
     sendWhenReady({ type: 'join_room', roomCode: roomCode.toUpperCase(), playerName, walletAddress });
@@ -168,7 +176,7 @@ export function useMultiplayer() {
   const leaveRoom = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: 'leave_room' }));
     setState(prev => ({
-      ...prev, roomCode: null, playerId: null, hostId: null, players: [], phase: 'idle', cards: [],
+      ...prev, roomCode: null, playerId: null, hostId: null, maxPlayers: 6, players: [], phase: 'idle', cards: [],
       currentBall: null, currentLetter: null, drawnBalls: [],
       winningPlayerId: null, winningPlayerName: null, bonusWinnerId: null,
       bonusAmounts: [], bonusWinnerName: null, cardIndex: null, error: null,

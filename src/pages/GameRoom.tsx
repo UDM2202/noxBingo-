@@ -25,6 +25,7 @@ function GameRoom() {
   const navigate = useNavigate();
   const mode = searchParams.get('mode') || 'solo';
   const playerName = searchParams.get('name') || 'Player';
+  const maxPlayers = parseInt(searchParams.get('maxPlayers') || '6', 10);
   
 
   const { state: soloState, dispatch, deployCards } = useGameReducer();
@@ -81,11 +82,14 @@ function GameRoom() {
     if (isMultiplayer && !hasConnected.current) {
       hasConnected.current = true;
       const wallet = publicKey?.toBase58() || null;
-      // Connection is automatic - just wait and send the command
+      // sendWhenReady inside useMultiplayer already queues the message
+      // until the socket is genuinely open, so there's no need for an
+      // artificial delay here — firing immediately just means the room
+      // code appears as soon as the server actually responds.
       if (mode === 'create') {
-        setTimeout(() => multi.createRoom(playerName, wallet), 800);
+        multi.createRoom(playerName, wallet, maxPlayers);
       } else if (mode === 'join' && roomCode) {
-        setTimeout(() => multi.joinRoom(roomCode, playerName, wallet), 800);
+        multi.joinRoom(roomCode, playerName, wallet);
       }
     }
   }, [isMultiplayer, mode, roomCode, playerName, publicKey]);
@@ -291,6 +295,9 @@ function GameRoom() {
         {isMultiplayer && phase === 'lobby' && (
           <div className="flex flex-col items-center justify-center min-h-[400px] gap-6">
             <p className="text-[#8B8BD4] text-xl">Room: {multi.roomCode}</p>
+            <p style={{ color: '#5C5C9E', fontSize: '13px' }}>
+              {multi.players.length} of {multi.maxPlayers} players
+            </p>
             <div className="flex flex-col gap-2 items-center">
               <p className="text-[#5C5C9E] text-sm uppercase tracking-wider">Players</p>
               {multi.players.map(p => (

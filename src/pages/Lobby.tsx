@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { useAudio } from '../hooks/useAudio'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -15,6 +16,7 @@ function Lobby() {
   const [roomCode, setRoomCode] = useState('')
   const [mode, setMode] = useState<'select' | 'create' | 'join'>('select')
   const [prizeTier, setPrizeTier] = useState('standard')
+  const [maxPlayers, setMaxPlayers] = useState(6)
   const { play } = useAudio()
   const { user, loading, signOut } = useAuth()
   const { isConnected } = useAccount()
@@ -37,6 +39,15 @@ function Lobby() {
         })
     }
   }, [user])
+
+  // Prefill the name field with the signed-in username once it loads,
+  // so players don't have to retype their own name every time — they
+  // can still edit it if they want to play under a different handle.
+  useEffect(() => {
+    if (username && !playerName) {
+      setPlayerName(username)
+    }
+  }, [username])
 
   if (loading) {
     return (
@@ -66,20 +77,18 @@ function Lobby() {
     if (!playerName.trim()) return
     setIsInitiating(true)
     play('gameStart')
-    setTimeout(() => {
-      navigate(
-        '/room/new?mode=create&name=' + encodeURIComponent(playerName) + '&prize=' + prizeTier
-      )
-    }, 600)
+    navigate(
+      '/room/new?mode=create&name=' + encodeURIComponent(playerName) + '&prize=' + prizeTier + '&maxPlayers=' + maxPlayers
+    )
   }
 
   function handleJoinRoom() {
-    if (!roomCode.trim()) return
+    if (!roomCode.trim() || !playerName.trim()) return
     setIsInitiating(true)
     play('gameStart')
-    setTimeout(() => {
-      navigate('/room/' + roomCode.toUpperCase() + '?mode=join&name=Player')
-    }, 600)
+    navigate(
+      '/room/' + roomCode.toUpperCase() + '?mode=join&name=' + encodeURIComponent(playerName)
+    )
   }
 
   if (mode === 'create' || mode === 'join') {
@@ -131,32 +140,35 @@ function Lobby() {
             {mode === 'create' ? 'Create Room' : 'Join Room'}
           </motion.h2>
 
-          {mode === 'create' && (
-            <div style={{ marginBottom: '24px' }}>
-              <input
-                type="text"
-                placeholder="Room name"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                maxLength={20}
-                autoFocus
-                style={{
-                  width: '100%',
-                  padding: '16px 20px',
-                  backgroundColor: '#1A1A5E',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '12px',
-                  color: '#fff',
-                  fontSize: '18px',
-                  textAlign: 'center',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-                onFocus={(e) => (e.target.style.borderColor = 'rgba(0,229,255,0.5)')}
-                onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
-              />
-            </div>
-          )}
+          {/* This was previously mislabeled "Room name" and bound to
+              playerName — rooms don't have names, only auto-generated
+              codes. This is your display name in the room. Shared
+              between create and join so both flows actually know who
+              you are, instead of join hardcoding everyone as "Player". */}
+          <div style={{ marginBottom: '20px' }}>
+            <input
+              type="text"
+              placeholder="Your name"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              maxLength={20}
+              autoFocus={mode === 'create'}
+              style={{
+                width: '100%',
+                padding: '16px 20px',
+                backgroundColor: '#1A1A5E',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '12px',
+                color: '#fff',
+                fontSize: '18px',
+                textAlign: 'center',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+              onFocus={(e) => (e.target.style.borderColor = 'rgba(0,229,255,0.5)')}
+              onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
+            />
+          </div>
 
           {mode === 'join' && (
             <div style={{ marginBottom: '32px' }}>
@@ -166,6 +178,7 @@ function Lobby() {
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 maxLength={6}
+                autoFocus
                 style={{
                   width: '100%',
                   padding: '16px 20px',
@@ -183,6 +196,46 @@ function Lobby() {
                 onFocus={(e) => (e.target.style.borderColor = 'rgba(0,229,255,0.5)')}
                 onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
               />
+            </div>
+          )}
+
+          {mode === 'create' && (
+            <div style={{ marginBottom: '24px' }}>
+              <p
+                style={{
+                  fontSize: '12px',
+                  color: '#5C5C9E',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginBottom: '12px',
+                  textAlign: 'center',
+                }}
+              >
+                Room Size
+              </p>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                {[2, 4, 6, 8, 10].map((count) => (
+                  <button
+                    key={count}
+                    onClick={() => setMaxPlayers(count)}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '10px',
+                      border:
+                        maxPlayers === count
+                          ? '1px solid rgba(0,229,255,0.5)'
+                          : '1px solid rgba(255,255,255,0.1)',
+                      backgroundColor: maxPlayers === count ? 'rgba(0,229,255,0.08)' : 'transparent',
+                      color: maxPlayers === count ? '#00E5FF' : '#8B8BD4',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {count}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -245,7 +298,7 @@ function Lobby() {
             onClick={mode === 'create' ? handleCreateRoom : handleJoinRoom}
             disabled={
               isInitiating ||
-              (mode === 'create' && !playerName.trim()) ||
+              !playerName.trim() ||
               (mode === 'join' && !roomCode.trim())
             }
             style={{
@@ -338,8 +391,33 @@ function Lobby() {
         }}
       />
 
-      <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 10 }}>
-        <WalletButton />
+      {/* Two separate chains, two separate wallet systems — shown side
+          by side so it's explicit which one you're connecting, rather
+          than one unlabeled button that's actually Polygon-only. */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          alignItems: 'flex-end',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '10px', color: '#5C5C9E', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Polygon
+          </span>
+          <WalletButton />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '10px', color: '#5C5C9E', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Solana
+          </span>
+          <WalletMultiButton />
+        </div>
       </div>
 
       <motion.div

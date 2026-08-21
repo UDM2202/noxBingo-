@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Logs
 logs
 *.log
@@ -43,3 +44,8 @@ server/dist/
 
 # --- OS/editor cruft ---
 .DS_Store
+=======
+node_modules/
+dist/
+.env
+>>>>>>> 57b05a6541002537aff34abe448e5627a87dd385
