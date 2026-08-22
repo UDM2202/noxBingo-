@@ -103,7 +103,12 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                   ${isFreeSpace
                     ? 'bg-gold/10 cursor-default'
                     : isMarked
-                      ? 'bg-neon-primary/10 cursor-default'
+                      /* Was bg-neon-primary/10 — a 10% tint plus the
+                         browser's default focus outline on a disabled
+                         button was easy to mistake for "not marked",
+                         which is exactly what got reported. A solid
+                         fill + visible border removes the ambiguity. */
+                      ? 'bg-neon-primary/30 border border-neon-primary/70 cursor-default'
                       : 'bg-transparent cursor-pointer hover:bg-white/[0.03]'
                   }
                 `}
@@ -151,7 +156,7 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                     {typeof cell.value === 'number' ? cell.value : ''}
                   </motion.span>
                 )}
-                  {/* Nox cell circle â€” unmarked */}
+                  {/* Nox cell circle — unmarked */}
                   {isNoxCell && !isNoxHit && !isMarked && (
                     <motion.div
                       className="absolute inset-2 rounded-full pointer-events-none"
@@ -168,7 +173,7 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
                     />
 )}
 
-                                    {/* Nox cell circle â€” marked, bonus active */}
+                                    {/* Nox cell circle — marked, bonus active */}
                     {isNoxCell && !isNoxHit && isMarked && (
                       <motion.div
                         className="absolute inset-2 rounded-full pointer-events-none"
@@ -300,7 +305,7 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
             animate={{ opacity: [0.4, 0.8, 0.4] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
-            âœ¦ Nox Bonus Active âœ¦
+            ✦ Nox Bonus Active ✦
           </motion.span>
         </motion.div>
       )}
@@ -309,4 +314,3 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
 }
 
 export default HoloCard;
-

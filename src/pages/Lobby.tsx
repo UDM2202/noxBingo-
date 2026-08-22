@@ -2,12 +2,14 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
+import { useWallet } from '@solana/wallet-adapter-react'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { useAudio } from '../hooks/useAudio'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { WalletButton } from '../components/WalletButton'
 import { usePolygonContract } from '../hooks/usePolygonContract'
+import { useSolanaContract } from '../hooks/useSolanaContract'
 
 function Lobby() {
   const navigate = useNavigate()
@@ -21,11 +23,19 @@ function Lobby() {
   const { user, loading, signOut } = useAuth()
   const { isConnected } = useAccount()
   const { playerStats } = usePolygonContract()
+  const { publicKey: solanaPublicKey } = useWallet()
+  const { balance: orenBalance, getBalance: getOrenBalance } = useSolanaContract()
   const [username, setUsername] = useState('')
   const [balance] = useState(() => {
     const saved = localStorage.getItem('noxbingo-balance')
     return saved ? parseInt(saved) : 1000
   })
+
+  useEffect(() => {
+    if (solanaPublicKey) {
+      getOrenBalance()
+    }
+  }, [solanaPublicKey])
 
   useEffect(() => {
     if (user) {
@@ -530,6 +540,16 @@ function Lobby() {
                 <div style={{ marginTop: '8px', fontSize: '11px', color: '#5C5C9E' }}>
                   Polygon: {playerStats.totalWinnings.toLocaleString()} USDC won |{' '}
                   {playerStats.gamesPlayed} played
+                </div>
+              )}
+              {solanaPublicKey && (
+                <div style={{ marginTop: '8px', fontSize: '11px', color: '#5C5C9E' }}>
+                  {/* We don't track historical wins/games-played for
+                      Solana yet (no leaderboard/history logging wired
+                      to wallet address the way Polygon's on-chain read
+                      does) — showing live OREN balance is the honest
+                      thing to show today, not a fabricated stat. */}
+                  Solana: {orenBalance.toLocaleString()} OREN in wallet
                 </div>
               )}
             </div>
