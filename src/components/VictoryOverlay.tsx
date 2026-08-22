@@ -6,6 +6,7 @@ interface VictoryOverlayProps {
   bonusCardIndex: number | null;
   roomCode: string;
   cards: BingoCard[];
+  drawnBalls: number[];
   onPlayAgain: () => void;
   onBackToLobby?: () => void;
     isMultiplayerWinner?: boolean;
@@ -17,7 +18,8 @@ interface VictoryOverlayProps {
   payoutSignature?: string | null;
   payoutError?: string | null;
 }
-function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutError }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutError }: VictoryOverlayProps) {
+  const drawnNumbers = new Set(drawnBalls);
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
   const [viewingCards, setViewingCards] = useState(false);
@@ -79,7 +81,7 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, onP
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
             {card.grid.map((row, ri) => row.map((cell, ci) => {
               const isFree = cell.isFreeSpace;
-              const isMarked = cell.marked;
+              const isMarked = cell.marked || (typeof cell.value === 'number' && drawnNumbers.has(cell.value));
               const isNox = card.noxCell?.row === ri && card.noxCell?.col === ci;
               return (
                 <div key={ri+'-'+ci} style={{ width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', fontWeight: 700, fontSize: '14px', fontFamily: 'monospace', backgroundColor: isFree ? 'rgba(255,215,0,0.12)' : isMarked ? 'rgba(0,229,255,0.12)' : 'transparent', color: isFree ? '#FFD700' : isMarked ? '#00E5FF' : 'rgba(255,255,255,0.5)', border: isNox && !card.noxHit ? '2px solid rgba(255,215,0,0.4)' : '1px solid rgba(255,255,255,0.05)', boxShadow: isNox && card.noxHit ? '0 0 12px rgba(255,215,0,0.5)' : 'none' }}>

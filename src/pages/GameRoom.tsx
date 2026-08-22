@@ -295,6 +295,11 @@ function GameRoom() {
         {isMultiplayer && phase === 'lobby' && (
           <div className="flex flex-col items-center justify-center min-h-[400px] gap-6">
             <p className="text-[#8B8BD4] text-xl">Room: {multi.roomCode}</p>
+            {multi.hostChangeNotice && (
+              <p style={{ color: '#FFD700', fontSize: '13px', background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)', borderRadius: '8px', padding: '8px 16px' }}>
+                {multi.hostChangeNotice}
+              </p>
+            )}
             <p style={{ color: '#5C5C9E', fontSize: '13px' }}>
               {multi.players.length} of {multi.maxPlayers} players
             </p>
@@ -518,6 +523,7 @@ function GameRoom() {
             bonusCardIndex={bonusWinner}
             roomCode={displayRoomCode || ''}
             cards={cards}
+            drawnBalls={drawnBalls}
             onPlayAgain={handlePlayAgain}
             onBackToLobby={handleBackToLobby}
             isMultiplayerWinner={isMultiplayerWinner}
