@@ -13,7 +13,7 @@ interface HoloCardProps {
   onCellClick: (row: number, col: number) => void;
 }
 
-function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCellClick }: HoloCardProps) {
+function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victoryPhase, onCellClick }: HoloCardProps) {
   const isNearMiss = card.nearMissCount === 1;
   const cardLabel = 'Card ' + (cardIndex + 1);
 
@@ -85,7 +85,17 @@ function HoloCard({ card, cardIndex, currentBall, isWinning, victoryPhase, onCel
         {card.grid.map((row, rowIndex) =>
           row.map((cell, colIndex) => {
             const isFreeSpace = cell.isFreeSpace;
-            const isMarked = cell.marked;
+            // cell.marked comes from the initial cards_dealt payload
+            // and is never refreshed by the server after that (only
+            // the ball number itself is sent on each draw) — so this
+            // can't be trusted mid-game. drawnNumbers, on the other
+            // hand, genuinely accumulates every ball as it's called,
+            // so deriving "marked" from that is what actually stays
+            // correct and persistent for the whole game.
+            const isMarked =
+              isFreeSpace ||
+              cell.marked ||
+              (typeof cell.value === 'number' && drawnNumbers.has(cell.value));
             const isWinningCell = isWinning && victoryPhase === 'winning-cell' && isMarked;
             const isJustCalled = currentBall !== null && cell.value === currentBall;
             const isNoxCell = card.noxCell?.row === rowIndex && card.noxCell?.col === colIndex;
