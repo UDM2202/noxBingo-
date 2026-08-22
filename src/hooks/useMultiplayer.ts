@@ -33,6 +33,7 @@ type MultiplayerState = {
   error: string | null;
   noxBonusDisplay: number;
   entryFeeError: string | null;
+  hostChangeNotice: string | null;
   payoutSignature: string | null;
   payoutAmount: number | null;
   payoutError: string | null;
@@ -62,6 +63,7 @@ export function useMultiplayer() {
     error: null,
     noxBonusDisplay: 25,
     entryFeeError: null,
+    hostChangeNotice: null,
     payoutSignature: null,
     payoutAmount: null,
     payoutError: null,
@@ -91,13 +93,25 @@ export function useMultiplayer() {
             };
           case 'player_joined':
           case 'player_left':
-          case 'players_update':
+          case 'players_update': {
+            const newHostId = message.hostId || prev.hostId;
+            const newPlayers = message.players || prev.players;
+            // A genuine host reassignment — not the initial host being
+            // set when the room's first created — means whoever was
+            // hosting just left or got removed. Surface that clearly
+            // rather than letting the player list silently reshuffle.
+            const hostChanged = prev.hostId && newHostId && newHostId !== prev.hostId;
+            const newHostName = hostChanged ? newPlayers.find(p => p.id === newHostId)?.name : null;
             return {
               ...prev,
-              players: message.players || prev.players,
-              hostId: message.hostId || prev.hostId,
+              players: newPlayers,
+              hostId: newHostId,
               maxPlayers: message.maxPlayers ?? prev.maxPlayers,
+              hostChangeNotice: hostChanged
+                ? (newHostName ? `The host left — ${newHostName} is now hosting.` : 'The host left the room.')
+                : prev.hostChangeNotice,
             };
+          }
           case 'cards_dealt':
             return { ...prev, cards: message.cards, phase: 'playing', currentBall: null, drawnBalls: [] };
           case 'ball_drawn':
@@ -180,7 +194,7 @@ export function useMultiplayer() {
       currentBall: null, currentLetter: null, drawnBalls: [],
       winningPlayerId: null, winningPlayerName: null, bonusWinnerId: null,
       bonusAmounts: [], bonusWinnerName: null, cardIndex: null, error: null,
-      noxBonusDisplay: 25, entryFeeError: null,
+      noxBonusDisplay: 25, entryFeeError: null, hostChangeNotice: null,
       payoutSignature: null, payoutAmount: null, payoutError: null,
     }));
   }, []);
