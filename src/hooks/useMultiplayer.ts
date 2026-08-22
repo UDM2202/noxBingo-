@@ -95,7 +95,7 @@ export function useMultiplayer() {
           case 'player_left':
           case 'players_update': {
             const newHostId = message.hostId || prev.hostId;
-            const newPlayers = message.players || prev.players;
+            const newPlayers: PlayerInfo[] = message.players || prev.players;
             // A genuine host reassignment — not the initial host being
             // set when the room's first created — means whoever was
             // hosting just left or got removed. Surface that clearly
