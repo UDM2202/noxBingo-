@@ -1,3 +1,9 @@
+import { Buffer } from 'buffer'
+// @ts-expect-error - Buffer isn't a browser global, but Solana's
+// libraries (spl-token/web3.js) assume Node's Buffer exists under the
+// hood. This shim makes it available before anything else loads.
+window.Buffer = window.Buffer || Buffer
+
 import { StrictMode, useMemo } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
@@ -12,10 +18,6 @@ import '@rainbow-me/rainbowkit/styles.css'
 import '@solana/wallet-adapter-react-ui/styles.css'
 import './index.css'
 import App from './App'
-import { Buffer } from 'buffer'
-window.Buffer = window.Buffer || Buffer
-
-import { StrictMode, useMemo } from 'react'
 
 const queryClient = new QueryClient()
 
