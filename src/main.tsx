@@ -12,6 +12,10 @@ import '@rainbow-me/rainbowkit/styles.css'
 import '@solana/wallet-adapter-react-ui/styles.css'
 import './index.css'
 import App from './App'
+import { Buffer } from 'buffer'
+window.Buffer = window.Buffer || Buffer
+
+import { StrictMode, useMemo } from 'react'
 
 const queryClient = new QueryClient()
 
