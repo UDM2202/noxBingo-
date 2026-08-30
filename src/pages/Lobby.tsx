@@ -2,12 +2,12 @@
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
+import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
+import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { useAudio } from '../hooks/useAudio'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { WalletButton } from '../components/WalletButton'
 import { usePolygonContract } from '../hooks/usePolygonContract'
 import { useSolanaContract } from '../hooks/useSolanaContract'
 
@@ -21,9 +21,12 @@ function Lobby() {
   const [maxPlayers, setMaxPlayers] = useState(6)
   const { play } = useAudio()
   const { user, loading, signOut } = useAuth()
-  const { isConnected } = useAccount()
+  const { isConnected, address } = useAccount()
+  const { openConnectModal } = useConnectModal()
   const { playerStats } = usePolygonContract()
-  const { publicKey: solanaPublicKey } = useWallet()
+  const { publicKey: solanaPublicKey, disconnect: disconnectSolana } = useWallet()
+  const { setVisible: setSolanaModalVisible } = useWalletModal()
+  const [showChainPicker, setShowChainPicker] = useState(false)
   const { balance: orenBalance, getBalance: getOrenBalance } = useSolanaContract()
   const [username, setUsername] = useState('')
   const [balance] = useState(() => {
@@ -81,6 +84,12 @@ function Lobby() {
         />
       </div>
     )
+  }
+
+  function handleChainSelect(chain: 'polygon' | 'solana') {
+    setShowChainPicker(false)
+    if (chain === 'polygon') openConnectModal?.()
+    else setSolanaModalVisible(true)
   }
 
   function handleCreateRoom() {
@@ -401,9 +410,10 @@ function Lobby() {
         }}
       />
 
-      {/* Two separate chains, two separate wallet systems — shown side
-          by side so it's explicit which one you're connecting, rather
-          than one unlabeled button that's actually Polygon-only. */}
+      {/* One button, one decision point: click to connect, pick a
+          chain from the popup, then that chain's own wallet modal
+          takes over. Once connected, each connected chain shows its
+          own compact status instead of a button. */}
       <div
         style={{
           position: 'absolute',
@@ -416,18 +426,123 @@ function Lobby() {
           alignItems: 'flex-end',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '10px', color: '#5C5C9E', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Polygon
-          </span>
-          <WalletButton />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '10px', color: '#5C5C9E', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Solana
-          </span>
-          <WalletMultiButton />
-        </div>
+        {isConnected && address && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '10px', color: '#5C5C9E', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Polygon
+            </span>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#00FF88', boxShadow: '0 0 6px rgba(0,255,136,0.5)' }} />
+            <span style={{ fontSize: '12px', color: '#8B8BD4', fontFamily: 'monospace' }}>
+              {address.slice(0, 6)}...{address.slice(-4)}
+            </span>
+          </div>
+        )}
+
+        {solanaPublicKey && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '10px', color: '#5C5C9E', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Solana
+            </span>
+            <button
+              onClick={disconnectSolana}
+              title="Click to disconnect"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#00FF88', boxShadow: '0 0 6px rgba(0,255,136,0.5)' }} />
+              <span style={{ fontSize: '12px', color: '#8B8BD4', fontFamily: 'monospace' }}>
+                {solanaPublicKey.toBase58().slice(0, 4)}..{solanaPublicKey.toBase58().slice(-4)}
+              </span>
+            </button>
+          </div>
+        )}
+
+        {(!isConnected || !solanaPublicKey) && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowChainPicker(v => !v)}
+              style={{
+                padding: '8px 20px',
+                fontSize: '13px',
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                backgroundColor: '#1A1A5E',
+                border: '1px solid rgba(0,229,255,0.5)',
+                borderRadius: '10px',
+                color: '#00E5FF',
+                cursor: 'pointer',
+              }}
+            >
+              Connect Wallet
+            </button>
+
+            {showChainPicker && (
+              <>
+                {/* Invisible backdrop to close the picker on outside click */}
+                <div
+                  onClick={() => setShowChainPicker(false)}
+                  style={{ position: 'fixed', inset: 0, zIndex: 19 }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '110%',
+                    right: 0,
+                    marginTop: '6px',
+                    background: '#1A1A5E',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    zIndex: 20,
+                    minWidth: '150px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  {!isConnected && (
+                    <button
+                      onClick={() => handleChainSelect('polygon')}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '10px 16px',
+                        textAlign: 'left',
+                        background: 'none',
+                        border: 'none',
+                        color: '#8B8BD4',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(0,229,255,0.08)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                    >
+                      Polygon
+                    </button>
+                  )}
+                  {!solanaPublicKey && (
+                    <button
+                      onClick={() => handleChainSelect('solana')}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '10px 16px',
+                        textAlign: 'left',
+                        background: 'none',
+                        border: 'none',
+                        color: '#8B8BD4',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(0,229,255,0.08)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                    >
+                      Solana
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <motion.div
