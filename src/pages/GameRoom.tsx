@@ -48,8 +48,15 @@ function GameRoom() {
   const hasPlayedGameStart = useRef(false);
   const hasConnected = useRef(false);
   const hasSyncedWallet = useRef(false);
+  const hasAutoStartedSolo = useRef(false);
 
-  const isMultiplayer = mode === 'create' || mode === 'join';
+  // Solo now goes through the exact same server-authoritative room
+  // machinery as multiplayer — real wallet connect, real bundle
+  // payment, server-driven ball draw, real payout on a win. The old
+  // client-only free version (useGameReducer driving everything
+  // locally) is no longer used for 'solo' — its branches below simply
+  // won't fire anymore since isMultiplayer is now true for this mode.
+  const isMultiplayer = mode === 'create' || mode === 'join' || mode === 'solo';
   const [balance, setBalance] = useState(() => {
     // Load from DB async - start with localStorage fallback
     return 1000;
@@ -64,7 +71,7 @@ function GameRoom() {
   }, []);
 
   
-  const [isHost] = useState(mode === 'create');
+  const [isHost] = useState(mode === 'create' || mode === 'solo');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const myPlayerId = useRef<string | null>(null);
 
@@ -88,6 +95,8 @@ function GameRoom() {
       // code appears as soon as the server actually responds.
       if (mode === 'create') {
         multi.createRoom(playerName, wallet, maxPlayers);
+      } else if (mode === 'solo') {
+        multi.createRoom(playerName, wallet, 1, true);
       } else if (mode === 'join' && roomCode) {
         multi.joinRoom(roomCode, playerName, wallet);
       }
@@ -256,6 +265,18 @@ function GameRoom() {
     multi.startGame();
   }
 
+  // Solo has no one else to wait on, so once the lone player's payment
+  // is confirmed there's no reason to make them click Start themselves
+  // — fire it automatically the moment they're ready.
+  useEffect(() => {
+    if (mode !== 'solo' || hasAutoStartedSolo.current) return;
+    const me = multi.players.find(p => p.id === (myPlayerId.current || multi.playerId));
+    if (me?.walletAddress && me.paidEntryFee && multi.phase === 'lobby') {
+      hasAutoStartedSolo.current = true;
+      multi.startGame();
+    }
+  }, [mode, multi.players, multi.phase, multi.playerId]);
+
   async function handlePayEntryFee() {
     const bundle = CARD_BUNDLES.find(b => b.id === selectedBundleId);
     if (!bundle) return;
@@ -403,6 +424,19 @@ function GameRoom() {
             {(() => {
               const notReady = multi.players.filter(p => !p.walletAddress || !p.paidEntryFee);
               const allReady = notReady.length === 0;
+
+              if (mode === 'solo') {
+                return !allReady ? (
+                  <p style={{ color: '#FFD700', fontSize: '13px', textAlign: 'center', maxWidth: '280px' }}>
+                    Connect a wallet and pay to begin — the game starts automatically once you have.
+                  </p>
+                ) : (
+                  <p style={{ color: '#8B8BD4', fontSize: '13px', textAlign: 'center' }}>
+                    Starting…
+                  </p>
+                );
+              }
+
               return (
                 <>
                   {!allReady && (

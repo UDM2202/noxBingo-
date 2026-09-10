@@ -169,8 +169,8 @@ export function useMultiplayer() {
       ws.onopen = () => ws.send(JSON.stringify(payload));
     }
   };
-  const createRoom = useCallback((playerName: string, walletAddress?: string | null, maxPlayers?: number) => {
-    sendWhenReady({ type: 'create_room', playerName, walletAddress, maxPlayers });
+  const createRoom = useCallback((playerName: string, walletAddress?: string | null, maxPlayers?: number, isSolo?: boolean) => {
+    sendWhenReady({ type: 'create_room', playerName, walletAddress, maxPlayers, isSolo });
   }, []);
   const joinRoom = useCallback((roomCode: string, playerName: string, walletAddress?: string | null) => {
     sendWhenReady({ type: 'join_room', roomCode: roomCode.toUpperCase(), playerName, walletAddress });
