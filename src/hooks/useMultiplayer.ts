@@ -89,6 +89,7 @@ export function useMultiplayer() {
               playerId: message.playerId,
               hostId: message.hostId || prev.hostId,
               maxPlayers: message.maxPlayers ?? prev.maxPlayers,
+              noxBonusDisplay: message.noxBonusDisplay ?? prev.noxBonusDisplay,
               phase: 'lobby',
             };
           case 'player_joined':
