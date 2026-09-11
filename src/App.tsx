@@ -4,6 +4,8 @@ import Lobby from './pages/Lobby'
 import Auth from './pages/Auth'
 import Leaderboard from './pages/Leaderboard'
 import GameRoom from './pages/GameRoom'
+import AdminLogin from './pages/AdminLogin'
+import AdminDashboard from './pages/AdminDashboard'
 
 function App() {
   return (
@@ -14,8 +16,9 @@ function App() {
           <Route path="/" element={<Lobby />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/room/:roomCode" element={<GameRoom />} />
+          <Route path="/admin" element={<AdminLogin />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Routes>
       </div>
     </div>
