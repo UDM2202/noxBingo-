@@ -1,0 +1,15 @@
+{
+  "accountAssociation": {
+    "header": "REPLACE_ME",
+    "payload": "REPLACE_ME",
+    "signature": "REPLACE_ME"
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "NoxBingo",
+    "homeUrl": "https://nox-bingo-8x9m.vercel.app/miniapp",
+    "iconUrl": "https://nox-bingo-8x9m.vercel.app/icon.png",
+    "splashImageUrl": "https://nox-bingo-8x9m.vercel.app/splash.png",
+    "splashBackgroundColor": "#0B0B45"
+  }
+}

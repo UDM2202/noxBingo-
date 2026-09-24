@@ -15,8 +15,8 @@ import CountdownOverlay from '../components/CountdownOverlay';
 import AudioSettings from '../components/AudioSettings';
 import { useAudio } from '../hooks/useAudio';
 import { useAuth } from '../hooks/useAuth';
-import { useSolanaContract } from '../hooks/useSolanaContract';
-import { CARD_BUNDLES } from '../utils/cardBundles';
+import { useSolanaContract, getSolUsdPrice } from '../hooks/useSolanaContract';
+import { bundleOrenPrice, bundleSolPrice } from '../utils/cardBundles';
 import { getLetterForNumber } from '../utils/gameLogic';
 
 function GameRoom() {
@@ -31,10 +31,13 @@ function GameRoom() {
   const { state: soloState, dispatch, deployCards } = useGameReducer();
   const multi = useMultiplayer();
   const { publicKey } = useWallet();
-  const { payEntryFee } = useSolanaContract();
+  const { payEntryFee, payEntryFeeSol } = useSolanaContract();
   const [payingFee, setPayingFee] = useState(false);
   const [feeError, setFeeError] = useState<string | null>(null);
-  const [selectedBundleId, setSelectedBundleId] = useState<string>(CARD_BUNDLES[0].id);
+  const [selectedBundleId, setSelectedBundleId] = useState<string>('single');
+  const [selectedCurrency, setSelectedCurrency] = useState<'OREN' | 'SOL'>('OREN');
+  const [solUsdPrice, setSolUsdPrice] = useState<number | null>(null);
+  const [solPriceError, setSolPriceError] = useState<string | null>(null);
 
   const [showVictory, setShowVictory] = useState(false);
   const [showAudioSettings, setShowAudioSettings] = useState(false);
@@ -277,17 +280,45 @@ function GameRoom() {
     }
   }, [mode, multi.players, multi.phase, multi.playerId]);
 
+  // Fetch a live SOL price whenever SOL is selected, so the quote
+  // shown before signing is accurate — the server re-fetches this
+  // itself at verification time regardless, this is purely display.
+  useEffect(() => {
+    if (selectedCurrency !== 'SOL') return;
+    let cancelled = false;
+    setSolPriceError(null);
+    getSolUsdPrice()
+      .then(price => { if (!cancelled) setSolUsdPrice(price); })
+      .catch(() => { if (!cancelled) setSolPriceError('Could not fetch a live SOL price right now.'); });
+    return () => { cancelled = true; };
+  }, [selectedCurrency, selectedBundleId]);
+
   async function handlePayEntryFee() {
-    const bundle = CARD_BUNDLES.find(b => b.id === selectedBundleId);
+    const bundle = multi.bundles.find(b => b.id === selectedBundleId);
     if (!bundle) return;
     setFeeError(null);
     setPayingFee(true);
     try {
-      const signature = await payEntryFee(bundle.priceOren);
-      multi.submitEntryFee(signature, bundle.id);
+      if (selectedCurrency === 'OREN') {
+        const orenAmount = bundleOrenPrice(bundle, multi.orenToGbpRate);
+        const signature = await payEntryFee(orenAmount);
+        multi.submitEntryFee(signature, bundle.id, 'OREN');
+      } else {
+        if (!solUsdPrice) {
+          setFeeError('Still fetching a live SOL price — try again in a moment.');
+          return;
+        }
+        const solAmount = bundleSolPrice(bundle, multi.gbpToUsdtRate, solUsdPrice);
+        const signature = await payEntryFeeSol(solAmount);
+        multi.submitEntryFee(signature, bundle.id, 'SOL');
+      }
     } catch (err) {
       console.error('payEntryFee failed:', err);
-      setFeeError('Payment failed or was rejected. Check your OREN balance and try again.');
+      setFeeError(
+        selectedCurrency === 'OREN'
+          ? 'Payment failed or was rejected. Check your OREN balance and try again.'
+          : 'Payment failed or was rejected. Check your SOL balance and try again.'
+      );
     } finally {
       setPayingFee(false);
     }
@@ -367,7 +398,7 @@ function GameRoom() {
                   Choose your cards
                 </p>
                 <div className="flex gap-2">
-                  {CARD_BUNDLES.map(bundle => {
+                  {multi.bundles.map(bundle => {
                     const isSelected = bundle.id === selectedBundleId;
                     return (
                       <button
@@ -385,14 +416,61 @@ function GameRoom() {
                         }}
                       >
                         <div style={{ fontWeight: 700, fontSize: '14px' }}>{bundle.label}</div>
-                        <div style={{ fontSize: '13px', marginTop: '4px' }}>{bundle.priceOren} OREN</div>
+                        <div style={{ fontSize: '13px', marginTop: '4px' }}>£{bundle.priceGBP.toFixed(2)}</div>
                       </button>
                     );
                   })}
                 </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {(['OREN', 'SOL'] as const).map(currency => (
+                    <button
+                      key={currency}
+                      onClick={() => setSelectedCurrency(currency)}
+                      style={{
+                        padding: '6px 16px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        border: selectedCurrency === currency ? '1px solid rgba(0,229,255,0.5)' : '1px solid rgba(255,255,255,0.15)',
+                        background: selectedCurrency === currency ? 'rgba(0,229,255,0.08)' : 'transparent',
+                        color: selectedCurrency === currency ? '#00E5FF' : '#8B8BD4',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Pay with {currency}
+                    </button>
+                  ))}
+                </div>
+
+                {(() => {
+                  const bundle = multi.bundles.find(b => b.id === selectedBundleId);
+                  if (!bundle) return null;
+                  if (selectedCurrency === 'OREN') {
+                    const orenAmount = bundleOrenPrice(bundle, multi.orenToGbpRate);
+                    return (
+                      <p style={{ color: '#8B8BD4', fontSize: '13px' }}>
+                        {orenAmount.toFixed(2)} OREN
+                      </p>
+                    );
+                  }
+                  if (solPriceError) {
+                    return <p style={{ color: '#FF6464', fontSize: '12px' }}>{solPriceError}</p>;
+                  }
+                  if (!solUsdPrice) {
+                    return <p style={{ color: '#8B8BD4', fontSize: '13px' }}>Fetching live SOL price…</p>;
+                  }
+                  const solAmount = bundleSolPrice(bundle, multi.gbpToUsdtRate, solUsdPrice);
+                  return (
+                    <p style={{ color: '#8B8BD4', fontSize: '13px' }}>
+                      ~{solAmount.toFixed(5)} SOL
+                    </p>
+                  );
+                })()}
+
                 <motion.button
                   onClick={handlePayEntryFee}
-                  disabled={payingFee}
+                  disabled={payingFee || (selectedCurrency === 'SOL' && !solUsdPrice)}
                   style={{
                     padding: '12px 32px',
                     fontSize: '15px',
@@ -408,7 +486,7 @@ function GameRoom() {
                   whileHover={{ scale: payingFee ? 1 : 1.03 }}
                   whileTap={{ scale: payingFee ? 1 : 0.97 }}
                 >
-                  {payingFee ? 'Sending…' : `Pay ${CARD_BUNDLES.find(b => b.id === selectedBundleId)?.priceOren ?? ''} OREN`}
+                  {payingFee ? 'Sending…' : `Pay with ${selectedCurrency}`}
                 </motion.button>
                 {(feeError || multi.entryFeeError) && (
                   <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>

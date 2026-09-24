@@ -6,7 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 interface CardBundle {
   id: string
   cardCount: number
-  priceOren: number
+  priceGBP: number
   label: string
 }
 
@@ -16,6 +16,8 @@ interface GameConfig {
   bundles: CardBundle[]
   soloMultipliers: Record<string, number>
   noxBonusDisplay: number
+  orenToGbpRate: number
+  gbpToUsdtRate: number
 }
 
 interface Stats {
@@ -211,6 +213,9 @@ function AdminDashboard() {
       {/* Bundles */}
       <BundlesSection config={config} onSave={saveConfig} />
 
+      {/* OREN and SOL pricing rates */}
+      <PricingRatesSection config={config} onSave={saveConfig} />
+
       {/* Nox bonus */}
       <NoxBonusSection config={config} onSave={saveConfig} />
 
@@ -285,7 +290,7 @@ function BundlesSection({
     setBundles(prev =>
       prev.map((b, i) =>
         i === index
-          ? { ...b, [field]: field === 'cardCount' || field === 'priceOren' ? Number(value) : value }
+          ? { ...b, [field]: field === 'cardCount' || field === 'priceGBP' ? Number(value) : value }
           : b
       )
     )
@@ -317,13 +322,13 @@ function BundlesSection({
             />
           </div>
           <div style={{ width: '110px' }}>
-            <label style={labelStyle}>Price (OREN)</label>
+            <label style={labelStyle}>Price (£)</label>
             <input
               type="number"
               min={0}
-              step={0.1}
-              value={bundle.priceOren}
-              onChange={(e) => updateBundle(i, 'priceOren', e.target.value)}
+              step={0.01}
+              value={bundle.priceGBP}
+              onChange={(e) => updateBundle(i, 'priceGBP', e.target.value)}
               style={inputStyle}
             />
           </div>
@@ -343,6 +348,60 @@ function BundlesSection({
       <button
         onClick={() => onSave({ bundles, soloMultipliers: multipliers }, 'Bundles and multipliers saved.')}
         style={{ ...saveButtonStyle, marginTop: '8px' }}
+      >
+        Save
+      </button>
+    </div>
+  )
+}
+
+function PricingRatesSection({
+  config,
+  onSave,
+}: {
+  config: GameConfig
+  onSave: (partial: Partial<GameConfig>, msg: string) => void
+}) {
+  const [orenToGbpRate, setOrenToGbpRate] = useState(config.orenToGbpRate)
+  const [gbpToUsdtRate, setGbpToUsdtRate] = useState(config.gbpToUsdtRate)
+
+  return (
+    <div style={sectionStyle}>
+      <h2 style={{ fontSize: '14px', color: '#00E5FF', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Pricing Rates
+      </h2>
+      <p style={{ fontSize: '12px', color: '#5C5C9E', marginBottom: '12px' }}>
+        Bundle prices are set in £. These two rates convert that into what a player
+        actually pays — OREN converts directly through the first rate; SOL converts
+        through the second rate plus a live SOL/USD price fetched at payment time.
+      </p>
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '180px' }}>
+          <label style={labelStyle}>£ per 1 OREN</label>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            value={orenToGbpRate}
+            onChange={(e) => setOrenToGbpRate(Number(e.target.value))}
+            style={inputStyle}
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: '180px' }}>
+          <label style={labelStyle}>USDT per £1</label>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            value={gbpToUsdtRate}
+            onChange={(e) => setGbpToUsdtRate(Number(e.target.value))}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+      <button
+        onClick={() => onSave({ orenToGbpRate, gbpToUsdtRate }, 'Pricing rates saved.')}
+        style={saveButtonStyle}
       >
         Save
       </button>

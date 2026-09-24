@@ -1,5 +1,5 @@
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { PublicKey, Transaction } from '@solana/web3.js';
+import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
@@ -7,11 +7,24 @@ import {
 } from '@solana/spl-token';
 import { useState } from 'react';
 
-const OREN_MINT = new PublicKey('FvR82vvRtXmWKJXW5MUGVFLcLoRebfq3BasiYYRTD2JE');
+// Confirmed live on Solana mainnet: name "Oren", ticker $SOREN,
+// supply 2,600,000,000, 8 decimals.
+const OREN_MINT = new PublicKey('6EqY4SZKesXPzVJD3BhdFszYqnossy6t1gU43GSBqkQs');
 // Same address the server pays winners from — public knowledge, safe
 // to hardcode (it's just where the money goes, not a secret).
 export const TREASURY_WALLET = new PublicKey('Gahk26BjGG5BQR8AbRVwb3CSTh5rJquyZxN4cHR44sVz');
 const DECIMALS = 8;
+
+const SOL_USD_FEED_ID = 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d';
+const HERMES_URL = 'https://hermes.pyth.network/v2/updates/price/latest';
+export async function getSolUsdPrice(): Promise<number> {
+  const res = await fetch(`${HERMES_URL}?ids[]=${SOL_USD_FEED_ID}`);
+  if (!res.ok) throw new Error('Could not fetch live SOL price');
+  const data = await res.json();
+  const feed = data.parsed?.[0];
+  if (!feed) throw new Error('No SOL/USD price available right now');
+  return Number(feed.price.price) * 10 ** feed.price.expo;
+}
 
 export function useSolanaContract() {
   const { connection } = useConnection();
@@ -66,5 +79,25 @@ export function useSolanaContract() {
     }
   };
 
-  return { getBalance, balance, payEntryFee, loading };
+  const payEntryFeeSol = async (amountSol: number): Promise<string> => {
+    if (!publicKey) throw new Error('Wallet not connected');
+    setLoading(true);
+    try {
+      const lamports = Math.round(amountSol * 1e9);
+      const tx = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: TREASURY_WALLET,
+          lamports,
+        })
+      );
+      const signature = await sendTransaction(tx, connection);
+      await connection.confirmTransaction(signature, 'confirmed');
+      return signature;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { getBalance, balance, payEntryFee, payEntryFeeSol, loading };
 }

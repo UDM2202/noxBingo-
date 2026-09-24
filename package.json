@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0",
+    "@farcaster/mini-app-solana": "^2.0.0",
+    "@farcaster/miniapp-sdk": "^0.3.0",
     "@rainbow-me/rainbowkit": "^2.2.11",
     "@solana/spl-token": "^0.4.15",
     "@solana/wallet-adapter-base": "^0.9.27",

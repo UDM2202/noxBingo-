@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { BingoCard } from '../types/game';
+import { CARD_BUNDLES, DEFAULT_OREN_TO_GBP_RATE, DEFAULT_GBP_TO_USDT_RATE, type CardBundle } from '../utils/cardBundles';
 type ServerMessage = {
   type: string;
   [key: string]: any;
@@ -37,6 +38,12 @@ type MultiplayerState = {
   payoutSignature: string | null;
   payoutAmount: number | null;
   payoutError: string | null;
+  // This room's real bundles/rates, sent by the server on
+  // room_created — falls back to client defaults only until that
+  // first message arrives.
+  bundles: CardBundle[];
+  orenToGbpRate: number;
+  gbpToUsdtRate: number;
 };
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
 export function useMultiplayer() {
@@ -67,6 +74,9 @@ export function useMultiplayer() {
     payoutSignature: null,
     payoutAmount: null,
     payoutError: null,
+    bundles: CARD_BUNDLES,
+    orenToGbpRate: DEFAULT_OREN_TO_GBP_RATE,
+    gbpToUsdtRate: DEFAULT_GBP_TO_USDT_RATE,
   });
   useEffect(() => {
     mountedRef.current = true;
@@ -90,6 +100,9 @@ export function useMultiplayer() {
               hostId: message.hostId || prev.hostId,
               maxPlayers: message.maxPlayers ?? prev.maxPlayers,
               noxBonusDisplay: message.noxBonusDisplay ?? prev.noxBonusDisplay,
+              bundles: message.bundles ?? prev.bundles,
+              orenToGbpRate: message.orenToGbpRate ?? prev.orenToGbpRate,
+              gbpToUsdtRate: message.gbpToUsdtRate ?? prev.gbpToUsdtRate,
               phase: 'lobby',
             };
           case 'player_joined':
@@ -97,10 +110,6 @@ export function useMultiplayer() {
           case 'players_update': {
             const newHostId = message.hostId || prev.hostId;
             const newPlayers: PlayerInfo[] = message.players || prev.players;
-            // A genuine host reassignment — not the initial host being
-            // set when the room's first created — means whoever was
-            // hosting just left or got removed. Surface that clearly
-            // rather than letting the player list silently reshuffle.
             const hostChanged = prev.hostId && newHostId && newHostId !== prev.hostId;
             const newHostName = hostChanged ? newPlayers.find(p => p.id === newHostId)?.name : null;
             return {
@@ -179,8 +188,8 @@ export function useMultiplayer() {
   const setWallet = useCallback((walletAddress: string) => {
     wsRef.current?.send(JSON.stringify({ type: 'set_wallet', walletAddress }));
   }, []);
-  const submitEntryFee = useCallback((txSignature: string, bundleId: string) => {
-    wsRef.current?.send(JSON.stringify({ type: 'submit_entry_fee', txSignature, bundleId }));
+  const submitEntryFee = useCallback((txSignature: string, bundleId: string, currency: 'OREN' | 'SOL') => {
+    wsRef.current?.send(JSON.stringify({ type: 'submit_entry_fee', txSignature, bundleId, currency }));
   }, []);
   const removePlayer = useCallback((playerId: string) => {
     wsRef.current?.send(JSON.stringify({ type: 'remove_player', playerId }));
@@ -197,6 +206,7 @@ export function useMultiplayer() {
       bonusAmounts: [], bonusWinnerName: null, cardIndex: null, error: null,
       noxBonusDisplay: 25, entryFeeError: null, hostChangeNotice: null,
       payoutSignature: null, payoutAmount: null, payoutError: null,
+      bundles: CARD_BUNDLES, orenToGbpRate: DEFAULT_OREN_TO_GBP_RATE, gbpToUsdtRate: DEFAULT_GBP_TO_USDT_RATE,
     }));
   }, []);
   return { ...state, createRoom, joinRoom, setWallet, submitEntryFee, removePlayer, startGame, leaveRoom };
