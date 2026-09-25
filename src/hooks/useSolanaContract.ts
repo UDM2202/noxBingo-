@@ -15,15 +15,24 @@ const OREN_MINT = new PublicKey('6EqY4SZKesXPzVJD3BhdFszYqnossy6t1gU43GSBqkQs');
 export const TREASURY_WALLET = new PublicKey('Gahk26BjGG5BQR8AbRVwb3CSTh5rJquyZxN4cHR44sVz');
 const DECIMALS = 8;
 
-const SOL_USD_FEED_ID = 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d';
-const HERMES_URL = 'https://hermes.pyth.network/v2/updates/price/latest';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+/**
+ * Live SOL/USD price, fetched purely for showing the player a quote
+ * before they sign. Routed through our own backend rather than
+ * calling Pyth's Hermes API directly from the browser — that call
+ * works fine server-side (see server/src/pyth.ts, used for real
+ * payment verification) but can fail client-side due to CORS, which
+ * has no bearing on security since the server independently re-checks
+ * the live price at verification time regardless of what this
+ * endpoint returns — this only ever affects what's displayed.
+ */
 export async function getSolUsdPrice(): Promise<number> {
-  const res = await fetch(`${HERMES_URL}?ids[]=${SOL_USD_FEED_ID}`);
+  const res = await fetch(`${API_URL}/sol-price`);
   if (!res.ok) throw new Error('Could not fetch live SOL price');
   const data = await res.json();
-  const feed = data.parsed?.[0];
-  if (!feed) throw new Error('No SOL/USD price available right now');
-  return Number(feed.price.price) * 10 ** feed.price.expo;
+  if (typeof data.price !== 'number') throw new Error('No SOL/USD price available right now');
+  return data.price;
 }
 
 export function useSolanaContract() {
@@ -79,6 +88,12 @@ export function useSolanaContract() {
     }
   };
 
+  /**
+   * Player signs and sends a native SOL transfer to the treasury as
+   * the entry fee — no token account needed, just a plain system
+   * transfer. amountSol should already be computed from the live
+   * price (see getSolUsdPrice above) before calling this.
+   */
   const payEntryFeeSol = async (amountSol: number): Promise<string> => {
     if (!publicKey) throw new Error('Wallet not connected');
     setLoading(true);
