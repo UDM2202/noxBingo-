@@ -624,6 +624,14 @@ function Lobby() {
               >
                 Play Solo
               </motion.button>
+              <div style={{ marginTop: '16px' }}>
+                <a
+                  href="/leaderboard"
+                  style={{ color: '#5C5C9E', fontSize: '12px', textDecoration: 'none' }}
+                >
+                  View Leaderboard
+                </a>
+              </div>
             </motion.div>
           </>
         ) : (
