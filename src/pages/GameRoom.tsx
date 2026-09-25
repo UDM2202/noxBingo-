@@ -402,7 +402,36 @@ function GameRoom() {
             </div>
 
             <div className="flex flex-col items-center gap-2">
-              <WalletMultiButton />
+              {isFarcasterMiniApp ? (
+                !publicKey && (
+                  <>
+                    <motion.button
+                      onClick={handleMiniAppConnect}
+                      disabled={connecting}
+                      style={{
+                        padding: '12px 32px',
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        backgroundColor: 'rgba(0,229,255,0.1)',
+                        border: '1px solid rgba(0,229,255,0.4)',
+                        borderRadius: '10px',
+                        color: '#00E5FF',
+                        cursor: connecting ? 'wait' : 'pointer',
+                        opacity: connecting ? 0.6 : 1,
+                      }}
+                    >
+                      {connecting ? 'Connecting…' : `Connect${wallet ? ` ${wallet.adapter.name}` : ''}`}
+                    </motion.button>
+                    {miniAppConnectError && (
+                      <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '260px' }}>
+                        {miniAppConnectError}
+                      </p>
+                    )}
+                  </>
+                )
+              ) : (
+                <WalletMultiButton />
+              )}
               {!publicKey && (
                 <p style={{ color: '#8B8BD4', fontSize: '12px', textAlign: 'center', maxWidth: '260px' }}>
                   Connect a Solana wallet to play. You'll be removed from the room if you don't connect within 90 seconds.
