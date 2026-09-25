@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@solana/wallet-adapter-react'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
@@ -30,7 +30,25 @@ function GameRoom() {
 
   const { state: soloState, dispatch, deployCards } = useGameReducer();
   const multi = useMultiplayer();
-  const { publicKey } = useWallet();
+  const { publicKey, connect, connecting, wallet } = useWallet();
+  const location = useLocation();
+  // Inside the Farcaster Mini App, FarcasterSolanaProvider auto-selects
+  // the wallet already — no picker needed or wanted there. Forcing our
+  // normal multi-wallet picker (built for choosing among several
+  // installed browser extensions) fights against that and was the
+  // actual cause of the "No address" connect failures.
+  const isFarcasterMiniApp = location.pathname === '/miniapp';
+  const [miniAppConnectError, setMiniAppConnectError] = useState<string | null>(null);
+
+  async function handleMiniAppConnect() {
+    setMiniAppConnectError(null);
+    try {
+      await connect();
+    } catch (err) {
+      console.error('Farcaster wallet connect failed:', err);
+      setMiniAppConnectError('No Solana wallet is available in this client. Link one in your Farcaster settings first.');
+    }
+  }
   const { payEntryFee, payEntryFeeSol } = useSolanaContract();
   const [payingFee, setPayingFee] = useState(false);
   const [feeError, setFeeError] = useState<string | null>(null);
