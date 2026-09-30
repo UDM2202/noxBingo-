@@ -690,9 +690,13 @@ function GameRoom() {
             winnerName={winnerName}
             playerName={playerName}
             /* Payout is server-initiated and automatic — these just
-               reflect status as it comes in over the socket. */
+               reflect status as it comes in over the socket.
+               payoutAmount is the real, server-computed figure —
+               replaces the old hardcoded fake win-amount display. */
             payoutSignature={multi.payoutSignature}
+            payoutAmount={multi.payoutAmount}
             payoutError={multi.payoutError}
+            noxBonusAmount={multi.noxBonusDisplay}
           />
         )}
       {showLeaveConfirm && (

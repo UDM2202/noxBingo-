@@ -14,11 +14,17 @@ interface VictoryOverlayProps {
   winnerName?: string | null;
   playerName?: string;
   // Automatic on-chain payout status, pushed by the server once the
-  // treasury sends OREN to the winner's wallet.
+  // treasury sends OREN to the winner's wallet. payoutAmount is the
+  // REAL amount the server actually computed and sent — replaces the
+  // old hardcoded "+100 NOX" placeholder that was never wired to
+  // anything real and could show a number the treasury couldn't
+  // actually cover.
   payoutSignature?: string | null;
+  payoutAmount?: number | null;
   payoutError?: string | null;
+  noxBonusAmount?: number;
 }
-function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutError }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount }: VictoryOverlayProps) {
   const drawnNumbers = new Set(drawnBalls);
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
@@ -141,8 +147,16 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
         </motion.p>
         {(hasBingo || hasBonus) && !isMultiplayerLoser && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }} style={{ marginBottom: '24px' }}>
-            {hasBingo && <motion.p animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1.5, repeat: Infinity }} style={{ fontSize: '24px', fontWeight: 700, color: '#FFD700' }}>+100 NOX</motion.p>}
-            {hasBonus && <motion.p animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 2, repeat: Infinity }} style={{ fontSize: '18px', fontWeight: 600, color: '#00E5FF', marginTop: '4px' }}>+25 NOX Bonus</motion.p>}
+            {hasBingo && payoutAmount != null && (
+              <motion.p animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 1.5, repeat: Infinity }} style={{ fontSize: '24px', fontWeight: 700, color: '#FFD700' }}>
+                Won {payoutAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} OREN
+              </motion.p>
+            )}
+            {hasBonus && (
+              <motion.p animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 2, repeat: Infinity }} style={{ fontSize: '18px', fontWeight: 600, color: '#00E5FF', marginTop: '4px' }}>
+                +{noxBonusAmount ?? 25} NOX Bonus
+              </motion.p>
+            )}
           </motion.div>
         )}
 
@@ -161,7 +175,7 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
                   {coinEmoji} Prize sent to your wallet!
                 </p>
                 <a
-                  href={'https://explorer.solana.com/tx/' + payoutSignature + '?cluster=devnet'}
+                  href={'https://explorer.solana.com/tx/' + payoutSignature}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ color: '#00E5FF', fontSize: '12px', wordBreak: 'break-all', textDecoration: 'underline' }}

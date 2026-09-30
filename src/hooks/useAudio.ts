@@ -180,7 +180,12 @@ export function useAudio() {
       if (voice) {
         utterance.voice = voice;
       }
-      // Apply pitch/rate/volume modifiers
+      // Apply pitch/rate/volume modifiers. Web Speech API valid
+      // ranges: pitch 0–2 (default 1), rate 0.1–10 (default 1),
+      // volume 0–1. A value outside these gets silently clamped or
+      // reset by the browser with no error — that's exactly what was
+      // happening to 'alien' (pitch was set to 2.5, past the max of
+      // 2), which is why it never actually sounded distinct.
       switch (voicePreset) {
         case 'male':
           utterance.rate = 0.85;
@@ -199,7 +204,7 @@ export function useAudio() {
           break;
         case 'alien':
           utterance.rate = 0.4;
-          utterance.pitch = 2.5;
+          utterance.pitch = 2.0;
           utterance.volume = 0.7;
           break;
         case 'whisper':
@@ -235,12 +240,3 @@ export function useAudio() {
   }, [voicePreset, speakNumber]);
   return { play, speakNumber, soundEnabled, toggleSound, voicePreset, changeVoice, previewVoice, VOICE_PRESETS, voicesReady };
 }
-
-
-
-
-
-
-
-
-
