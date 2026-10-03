@@ -7,8 +7,13 @@ import { useAudio } from '../hooks/useAudio'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { useSolanaContract } from '../hooks/useSolanaContract'
+import { usePageMeta } from '../hooks/usePageMeta'
 
 function Lobby() {
+  usePageMeta(
+    'NoxBingo — Solana Bingo Game, Win Real OREN Crypto',
+    'Play crypto bingo on Solana and win real OREN tokens. Connect your wallet, join a room, and play bingo for real money prizes on NoxBingo.'
+  )
   const navigate = useNavigate()
   const [isInitiating, setIsInitiating] = useState(false)
   const [playerName, setPlayerName] = useState('')

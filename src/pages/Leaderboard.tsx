@@ -1,7 +1,13 @@
 ﻿import { useState, useEffect } from 'react';
+import { usePageMeta } from '../hooks/usePageMeta'
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
+
 function Leaderboard() {
+    usePageMeta(
+  'NoxBingo Leaderboard — Top Solana Bingo Winners',
+  "See who's winning the most OREN playing crypto bingo on NoxBingo, the Solana-powered bingo game with real money prizes."
+)
   const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
