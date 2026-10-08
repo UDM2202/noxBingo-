@@ -23,8 +23,17 @@ interface VictoryOverlayProps {
   payoutAmount?: number | null;
   payoutError?: string | null;
   noxBonusAmount?: number;
+  // Jackpot — a completely separate, additive prize on top of the
+  // normal payout above. jackpotWon flips true the instant the server
+  // announces the hit (before the on-chain transfer even starts);
+  // jackpotSignature fills in once that transfer confirms, same
+  // pending → confirmed pattern as the normal payout status box.
+  jackpotWon?: boolean;
+  jackpotAmount?: number | null;
+  jackpotSignature?: string | null;
+  jackpotError?: string | null;
 }
-function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount, jackpotWon, jackpotAmount, jackpotSignature, jackpotError }: VictoryOverlayProps) {
   const drawnNumbers = new Set(drawnBalls);
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
@@ -37,6 +46,9 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
   // Only the actual multiplayer bingo winner gets a real on-chain
   // payout (nox-bonus-only isn't wired to a payout).
   const showPayoutStatus = isMultiplayerWinner && hasBingo;
+  // The jackpot is its own separate prize — only show this box to the
+  // actual jackpot winner, same rule as the normal payout box above.
+  const showJackpotStatus = isMultiplayerWinner && hasBingo && jackpotWon;
   useEffect(() => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let iterations = 0;
@@ -65,12 +77,13 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
   }
   function nextCard() { setCurrentViewCard(prev => (prev + 1) % cards.length); }
   function prevCard() { setCurrentViewCard(prev => (prev - 1 + cards.length) % cards.length); }
-  const clapEmoji = '\uD83D\uDC4F';
-  const sparkleEmoji = '\uD83D\uDCAB';
-  const trophyEmoji = '\uD83C\uDFC6';
-  const starEmoji = '\u2728';
-  const eyeEmoji = '\uD83D\uDC41';
-  const coinEmoji = '\uD83E\uDE99';
+  const clapEmoji = '👏';
+  const sparkleEmoji = '💫';
+  const trophyEmoji = '🏆';
+  const starEmoji = '✨';
+  const eyeEmoji = '👁';
+  const coinEmoji = '🪙';
+  const jackpotEmoji = '💰';
   if (viewingCards) {
     const card = cards[currentViewCard];
     const isWinner = currentViewCard === winningCardIndex;
@@ -125,6 +138,37 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
       <motion.div initial={{ scale: 0.5, opacity: 0, y: 40 }} animate={{ scale: 1, opacity: 1, y: 0 }} transition={{ delay: 0.3, type: 'spring', stiffness: 200, damping: 18 }}
         style={{ position: 'relative', maxWidth: '400px', overflowY: 'auto', maxHeight: '100vh', width: '100%', textAlign: 'center' }}>
         <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '160px', height: '160px', background: '#FFD700', borderRadius: '50%', filter: 'blur(80px)', opacity: 0.2, pointerEvents: 'none' }} />
+
+        {showJackpotStatus && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0, rotate: -8 }}
+            animate={{ scale: 1, opacity: 1, rotate: 0 }}
+            transition={{ delay: 0.15, type: 'spring', stiffness: 260, damping: 14 }}
+            style={{ marginBottom: '16px' }}
+          >
+            <motion.div
+              animate={{ boxShadow: ['0 0 20px rgba(255,215,0,0.3)', '0 0 40px rgba(255,215,0,0.6)', '0 0 20px rgba(255,215,0,0.3)'] }}
+              transition={{ duration: 1.4, repeat: Infinity }}
+              style={{
+                display: 'inline-block',
+                padding: '10px 20px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(255,165,0,0.15))',
+                border: '1.5px solid rgba(255,215,0,0.7)',
+              }}
+            >
+              <p style={{ fontSize: '22px', fontWeight: 800, color: '#FFD700', letterSpacing: '0.08em', margin: 0 }}>
+                {jackpotEmoji} JACKPOT! {jackpotEmoji}
+              </p>
+              {jackpotAmount != null && (
+                <p style={{ fontSize: '16px', fontWeight: 700, color: '#FFF3B0', margin: '4px 0 0' }}>
+                  +{jackpotAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} OREN
+                </p>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+
         <motion.div initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.5, duration: 0.6 }}
           style={{ fontSize: 'clamp(48px, 15vw, 80px)', marginBottom: '24px', position: 'relative' }}>
           <motion.span style={{ display: 'inline-block' }} animate={{ y: [0, -8, 0], rotate: [0, -5, 5, -3, 0] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}>
@@ -193,6 +237,44 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
                   transition={{ duration: 1.2, repeat: Infinity }}
                 />
                 Sending your prize…
+              </p>
+            )}
+          </motion.div>
+        )}
+
+        {showJackpotStatus && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.1 }}
+            style={{
+              marginBottom: '24px',
+              padding: '16px',
+              borderRadius: '12px',
+              background: 'rgba(255,215,0,0.08)',
+              border: '1px solid rgba(255,215,0,0.3)',
+            }}>
+            {jackpotSignature ? (
+              <>
+                <p style={{ color: '#FFD700', fontWeight: 700, fontSize: '15px', marginBottom: '6px' }}>
+                  {jackpotEmoji} Jackpot sent to your wallet!
+                </p>
+                <a
+                  href={'https://explorer.solana.com/tx/' + jackpotSignature}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#00E5FF', fontSize: '12px', wordBreak: 'break-all', textDecoration: 'underline' }}
+                >
+                  View transaction
+                </a>
+              </>
+            ) : jackpotError ? (
+              <p style={{ color: '#FF6464', fontSize: '13px' }}>{jackpotError}</p>
+            ) : (
+              <p style={{ color: '#8B8BD4', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <motion.span
+                  style={{ width: '8px', height: '8px', backgroundColor: '#FFD700', borderRadius: '50%' }}
+                  animate={{ opacity: [0.3, 1, 0.3] }}
+                  transition={{ duration: 1.2, repeat: Infinity }}
+                />
+                Sending your jackpot…
               </p>
             )}
           </motion.div>

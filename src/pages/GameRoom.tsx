@@ -26,7 +26,7 @@ function GameRoom() {
   const mode = searchParams.get('mode') || 'solo';
   const playerName = searchParams.get('name') || 'Player';
   const maxPlayers = parseInt(searchParams.get('maxPlayers') || '6', 10);
-  
+
 
   const { state: soloState, dispatch, deployCards } = useGameReducer();
   const multi = useMultiplayer();
@@ -85,13 +85,13 @@ function GameRoom() {
   useEffect(() => {
     getBalance().then(bal => setBalance(bal));
   }, []);
-  
+
 
   useEffect(() => {
     getBalance().then(bal => setBalance(bal));
   }, []);
 
-  
+
   const [isHost] = useState(mode === 'create' || mode === 'solo');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const myPlayerId = useRef<string | null>(null);
@@ -171,7 +171,7 @@ function GameRoom() {
   const winningCardIndex = isMultiplayer
     ? (multi.winningPlayerId === multi.playerId ? multi.cardIndex : null)
     : soloState.winningCardIndex;
-  const totalBonusAmount = isMultiplayer 
+  const totalBonusAmount = isMultiplayer
     ? multi.bonusAmounts.reduce((sum, a) => sum + a, 0)
     : 25;
   const bonusWinner = isMultiplayer
@@ -365,6 +365,11 @@ function GameRoom() {
         {isMultiplayer && phase === 'lobby' && (
           <div className="flex flex-col items-center justify-center min-h-[400px] gap-6">
             <p className="text-[#8B8BD4] text-xl">Room: {multi.roomCode}</p>
+            {multi.jackpotEnabled && multi.jackpotAmountOren > 0 && (
+              <p style={{ color: '#FFD700', fontSize: '13px', fontWeight: 700, background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.3)', borderRadius: '8px', padding: '8px 16px' }}>
+                {'💰'} Jackpot: {multi.jackpotAmountOren.toLocaleString(undefined, { maximumFractionDigits: 0 })} OREN
+              </p>
+            )}
             {multi.hostChangeNotice && (
               <p style={{ color: '#FFD700', fontSize: '13px', background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)', borderRadius: '8px', padding: '8px 16px' }}>
                 {multi.hostChangeNotice}
@@ -697,6 +702,14 @@ function GameRoom() {
             payoutAmount={multi.payoutAmount}
             payoutError={multi.payoutError}
             noxBonusAmount={multi.noxBonusDisplay}
+            /* Jackpot is a separate, additive prize — same
+               pending/confirmed/error pattern as the payout fields
+               above, just fed from the jackpot-specific socket
+               messages instead. */
+            jackpotWon={multi.jackpotWon}
+            jackpotAmount={multi.jackpotWonAmount}
+            jackpotSignature={multi.jackpotSignature}
+            jackpotError={multi.jackpotError}
           />
         )}
       {showLeaveConfirm && (

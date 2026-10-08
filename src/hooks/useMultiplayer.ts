@@ -44,6 +44,20 @@ type MultiplayerState = {
   bundles: CardBundle[];
   orenToGbpRate: number;
   gbpToUsdtRate: number;
+  // Jackpot — shown as a hook once room_created arrives. Odds are
+  // deliberately never sent by the server, so there's no field for
+  // them here.
+  jackpotEnabled: boolean;
+  jackpotAmountOren: number;
+  // Set the moment the server announces a jackpot hit (before the
+  // on-chain transfer even starts) so the UI can show something
+  // immediately rather than waiting for the payout to confirm.
+  jackpotWon: boolean;
+  jackpotWinnerId: string | null;
+  jackpotWinnerName: string | null;
+  jackpotWonAmount: number | null;
+  jackpotSignature: string | null;
+  jackpotError: string | null;
 };
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
 export function useMultiplayer() {
@@ -77,6 +91,14 @@ export function useMultiplayer() {
     bundles: CARD_BUNDLES,
     orenToGbpRate: DEFAULT_OREN_TO_GBP_RATE,
     gbpToUsdtRate: DEFAULT_GBP_TO_USDT_RATE,
+    jackpotEnabled: false,
+    jackpotAmountOren: 0,
+    jackpotWon: false,
+    jackpotWinnerId: null,
+    jackpotWinnerName: null,
+    jackpotWonAmount: null,
+    jackpotSignature: null,
+    jackpotError: null,
   });
   useEffect(() => {
     mountedRef.current = true;
@@ -103,6 +125,8 @@ export function useMultiplayer() {
               bundles: message.bundles ?? prev.bundles,
               orenToGbpRate: message.orenToGbpRate ?? prev.orenToGbpRate,
               gbpToUsdtRate: message.gbpToUsdtRate ?? prev.gbpToUsdtRate,
+              jackpotEnabled: message.jackpotEnabled ?? prev.jackpotEnabled,
+              jackpotAmountOren: message.jackpotAmountOren ?? prev.jackpotAmountOren,
               phase: 'lobby',
             };
           case 'player_joined':
@@ -136,6 +160,23 @@ export function useMultiplayer() {
             return { ...prev, payoutSignature: message.txSignature, payoutAmount: message.amount, payoutError: null };
           case 'payout_error':
             return { ...prev, payoutError: message.message };
+          // Announced the instant the slim random chance hits —
+          // arrives before the actual OREN transfer confirms, so the
+          // UI can show "jackpot!" right away and fill in the tx
+          // signature once jackpot_paid follows.
+          case 'jackpot_won':
+            return {
+              ...prev,
+              jackpotWon: true,
+              jackpotWinnerId: message.winnerId,
+              jackpotWinnerName: message.winnerName,
+              jackpotWonAmount: message.amount,
+              jackpotError: null,
+            };
+          case 'jackpot_paid':
+            return { ...prev, jackpotSignature: message.txSignature, jackpotWonAmount: message.amount, jackpotError: null };
+          case 'jackpot_payout_error':
+            return { ...prev, jackpotError: message.message };
           case 'entry_fee_rejected':
             return { ...prev, entryFeeError: message.message };
           case 'entry_fee_confirmed':
@@ -207,6 +248,9 @@ export function useMultiplayer() {
       noxBonusDisplay: 25, entryFeeError: null, hostChangeNotice: null,
       payoutSignature: null, payoutAmount: null, payoutError: null,
       bundles: CARD_BUNDLES, orenToGbpRate: DEFAULT_OREN_TO_GBP_RATE, gbpToUsdtRate: DEFAULT_GBP_TO_USDT_RATE,
+      jackpotEnabled: false, jackpotAmountOren: 0,
+      jackpotWon: false, jackpotWinnerId: null, jackpotWinnerName: null,
+      jackpotWonAmount: null, jackpotSignature: null, jackpotError: null,
     }));
   }, []);
   return { ...state, createRoom, joinRoom, setWallet, submitEntryFee, removePlayer, startGame, leaveRoom };

@@ -3,6 +3,13 @@ import { Routes, Route, Outlet } from 'react-router-dom'
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react'
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
 import { clusterApiUrl } from '@solana/web3.js'
+import {
+  PhantomWalletAdapter,
+  SolflareWalletAdapter,
+  BackpackWalletAdapter,
+  TrustWalletAdapter,
+  CoinbaseWalletAdapter,
+} from '@solana/wallet-adapter-wallets'
 import { FarcasterSolanaProvider } from '@farcaster/mini-app-solana'
 import { sdk } from '@farcaster/miniapp-sdk'
 import AnimatedBackground from './components/AnimatedBackground'
@@ -25,9 +32,29 @@ const SOLANA_RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl('dev
  */
 function StandardWalletLayout() {
   const endpoint = useMemo(() => SOLANA_RPC_URL, [])
-  // Modern wallet-adapter auto-detects installed wallets via the
-  // Wallet Standard, so an explicit `wallets` array isn't needed.
-  const wallets = useMemo(() => [], [])
+
+  // Wallet Standard auto-detects wallets that are actually installed
+  // and injected into the browser — but on its own it never lists a
+  // wallet the user DOESN'T have installed, which was the bug: the
+  // modal only ever showed whatever extension happened to already be
+  // present. Explicitly listing adapters here is what makes the
+  // modal's "More options" section show every one of these wallets
+  // even when uninstalled — clicking an uninstalled one takes the
+  // user to that wallet's install page (desktop) or deep-links into
+  // its mobile app (iOS/Android), instead of the option simply not
+  // existing. Add or remove adapters here as needed; each one some
+  // developer still has to maintain, so keep this to wallets real
+  // Solana bingo players actually use.
+  const wallets = useMemo(
+    () => [
+      new PhantomWalletAdapter(),
+      new SolflareWalletAdapter(),
+      new BackpackWalletAdapter(),
+      new TrustWalletAdapter(),
+      new CoinbaseWalletAdapter(),
+    ],
+    []
+  )
 
   return (
     <ConnectionProvider endpoint={endpoint}>

@@ -18,6 +18,9 @@ interface GameConfig {
   noxBonusDisplay: number
   orenToGbpRate: number
   gbpToUsdtRate: number
+  jackpotEnabled: boolean
+  jackpotAmountOren: number
+  jackpotOddsOneIn: number
 }
 
 interface Stats {
@@ -218,6 +221,9 @@ function AdminDashboard() {
 
       {/* Nox bonus */}
       <NoxBonusSection config={config} onSave={saveConfig} />
+
+      {/* Jackpot */}
+      <JackpotSection config={config} onSave={saveConfig} />
 
       <p style={{ fontSize: '11px', color: '#5C5C9E', textAlign: 'center', marginTop: '24px' }}>
         Changes only apply to games created after saving — rooms already in progress keep the settings they started with.
@@ -437,6 +443,89 @@ function NoxBonusSection({
         />
       </div>
       <button onClick={() => onSave({ noxBonusDisplay }, 'Nox bonus amount saved.')} style={saveButtonStyle}>
+        Save
+      </button>
+    </div>
+  )
+}
+
+function JackpotSection({
+  config,
+  onSave,
+}: {
+  config: GameConfig
+  onSave: (partial: Partial<GameConfig>, msg: string) => void
+}) {
+  const [jackpotEnabled, setJackpotEnabled] = useState(config.jackpotEnabled)
+  const [jackpotAmountOren, setJackpotAmountOren] = useState(config.jackpotAmountOren)
+  const [jackpotOddsOneIn, setJackpotOddsOneIn] = useState(config.jackpotOddsOneIn)
+
+  // Treasury impact if every single game happened to hit the jackpot
+  // back to back — not a real forecast, just a sanity-check number so
+  // whoever's editing this doesn't accidentally set an amount that
+  // could bleed the treasury faster than they realize.
+  const impliedAvgCostPerGame = jackpotEnabled ? jackpotAmountOren / Math.max(jackpotOddsOneIn, 1) : 0;
+
+  return (
+    <div style={sectionStyle}>
+      <h2 style={{ fontSize: '14px', color: '#00E5FF', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Jackpot
+      </h2>
+      <p style={{ fontSize: '12px', color: '#5C5C9E', marginBottom: '16px' }}>
+        A fixed OREN prize paid on top of a winner's normal payout, on a slim random
+        chance rolled once per completed game. The amount is shown to players; the
+        odds are never shown — only this dashboard and the server know them. The
+        jackpot amount does NOT grow over time and does NOT reset after a win — top
+        it back up here whenever you like.
+      </p>
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={jackpotEnabled}
+            onChange={(e) => setJackpotEnabled(e.target.checked)}
+            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+          />
+          <span style={{ fontSize: '14px', color: '#fff', fontWeight: 600 }}>Jackpot enabled</span>
+        </label>
+      </div>
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '180px' }}>
+          <label style={labelStyle}>Jackpot Amount (OREN)</label>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={jackpotAmountOren}
+            onChange={(e) => setJackpotAmountOren(Number(e.target.value))}
+            style={inputStyle}
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: '180px' }}>
+          <label style={labelStyle}>Odds — 1 in N games</label>
+          <input
+            type="number"
+            min={2}
+            step={1}
+            value={jackpotOddsOneIn}
+            onChange={(e) => setJackpotOddsOneIn(Number(e.target.value))}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+      <p style={{ fontSize: '11px', color: '#5C5C9E', marginBottom: '16px' }}>
+        Implied average jackpot cost per game: ~{impliedAvgCostPerGame.toLocaleString(undefined, { maximumFractionDigits: 3 })} OREN
+        (jackpot amount ÷ odds — a rough long-run average, not what any single game costs).
+      </p>
+      <button
+        onClick={() =>
+          onSave(
+            { jackpotEnabled, jackpotAmountOren, jackpotOddsOneIn },
+            'Jackpot settings saved.'
+          )
+        }
+        style={saveButtonStyle}
+      >
         Save
       </button>
     </div>
