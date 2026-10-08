@@ -6,7 +6,6 @@ import { clusterApiUrl } from '@solana/web3.js'
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
-  BackpackWalletAdapter,
   TrustWalletAdapter,
   CoinbaseWalletAdapter,
 } from '@solana/wallet-adapter-wallets'
@@ -38,18 +37,22 @@ function StandardWalletLayout() {
   // wallet the user DOESN'T have installed, which was the bug: the
   // modal only ever showed whatever extension happened to already be
   // present. Explicitly listing adapters here is what makes the
-  // modal's "More options" section show every one of these wallets
-  // even when uninstalled — clicking an uninstalled one takes the
-  // user to that wallet's install page (desktop) or deep-links into
-  // its mobile app (iOS/Android), instead of the option simply not
-  // existing. Add or remove adapters here as needed; each one some
-  // developer still has to maintain, so keep this to wallets real
-  // Solana bingo players actually use.
+  // modal's "More options" section show these wallets even when
+  // uninstalled — clicking an uninstalled one takes the user to that
+  // wallet's install page (desktop) or deep-links into its mobile app
+  // (iOS/Android), instead of the option simply not existing.
+  //
+  // Backpack is deliberately NOT in this list — it has no adapter
+  // package in @solana/wallet-adapter-wallets because it supports the
+  // Wallet Standard natively and self-registers in the browser. It
+  // still shows up automatically via Wallet Standard detection when a
+  // visitor actually has it installed; it just can't be given the
+  // "show it even when uninstalled, with an install link" treatment
+  // the explicit adapters below get.
   const wallets = useMemo(
     () => [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
-      new BackpackWalletAdapter(),
       new TrustWalletAdapter(),
       new CoinbaseWalletAdapter(),
     ],
