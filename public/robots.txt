@@ -1,6 +1,6 @@
 User-agent: *
+Allow: /
 Disallow: /admin
 Disallow: /admin/dashboard
-Allow: /
 
-Sitemap: https://noxbingo.io/sitemap.xml
+Sitemap: https://www.noxbingo.io/sitemap.xml
