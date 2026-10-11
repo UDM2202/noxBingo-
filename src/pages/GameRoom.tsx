@@ -331,20 +331,13 @@ function GameRoom() {
         multi.submitEntryFee(signature, bundle.id, 'SOL');
       }
     } catch (err) {
+      // Log the wallet/RPC's own error text for diagnosis, but keep it
+      // off the screen — players only see the friendly message.
       console.error('payEntryFee failed:', err);
-      // The generic message alone made this hard to diagnose (low SOL
-      // for fees, a rejected prompt, an RPC problem and a missing token
-      // account all looked identical), so append the wallet/RPC's own
-      // error text, trimmed so it can't blow up the layout.
-      const detail =
-        err instanceof Error
-          ? (err.name && err.name !== 'Error' ? err.name + ': ' : '') + err.message
-          : String(err);
       setFeeError(
-        (selectedCurrency === 'OREN'
+        selectedCurrency === 'OREN'
           ? 'Payment failed or was rejected. Check your OREN balance and try again.'
-          : 'Payment failed or was rejected. Check your SOL balance and try again.') +
-          (detail ? ' (' + detail.slice(0, 160) + ')' : '')
+          : 'Payment failed or was rejected. Check your SOL balance and try again.'
       );
     } finally {
       setPayingFee(false);
