@@ -667,8 +667,8 @@ function GameRoom() {
         )}
 
         {isMultiplayer && phase === 'idle' && (
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-center">
+          <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center text-center">
               {multi.error ? (
                 <p style={{ color: '#FF6464', fontSize: '15px', maxWidth: '280px' }}>{multi.error}</p>
               ) : (
@@ -677,7 +677,7 @@ function GameRoom() {
                       its square background) spinning as the loading indicator. */}
                   <svg
                     viewBox="11 11 42 42"
-                    className="w-16 h-16 mx-auto mb-4 animate-spin"
+                    className="block w-16 h-16 mx-auto mb-4 animate-spin"
                     style={{ animationDuration: '2s', filter: 'drop-shadow(0 0 8px rgba(0,229,255,0.45))' }}
                     aria-label="Loading"
                   >
