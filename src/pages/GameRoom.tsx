@@ -331,20 +331,13 @@ function GameRoom() {
         multi.submitEntryFee(signature, bundle.id, 'SOL');
       }
     } catch (err) {
+      // Log the wallet/RPC's own error text for diagnosis, but keep it
+      // off the screen — players only see the friendly message.
       console.error('payEntryFee failed:', err);
-      // The generic message alone made this hard to diagnose (low SOL
-      // for fees, a rejected prompt, an RPC problem and a missing token
-      // account all looked identical), so append the wallet/RPC's own
-      // error text, trimmed so it can't blow up the layout.
-      const detail =
-        err instanceof Error
-          ? (err.name && err.name !== 'Error' ? err.name + ': ' : '') + err.message
-          : String(err);
       setFeeError(
-        (selectedCurrency === 'OREN'
+        selectedCurrency === 'OREN'
           ? 'Payment failed or was rejected. Check your OREN balance and try again.'
-          : 'Payment failed or was rejected. Check your SOL balance and try again.') +
-          (detail ? ' (' + detail.slice(0, 160) + ')' : '')
+          : 'Payment failed or was rejected. Check your SOL balance and try again.'
       );
     } finally {
       setPayingFee(false);
@@ -674,13 +667,33 @@ function GameRoom() {
         )}
 
         {isMultiplayer && phase === 'idle' && (
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-center">
+          <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center text-center">
               {multi.error ? (
                 <p style={{ color: '#FF6464', fontSize: '15px', maxWidth: '280px' }}>{multi.error}</p>
               ) : (
                 <>
-                  <div className="w-16 h-16 border-2 border-neon-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                  {/* NoxBingo logo (same artwork as public/favicon.svg, minus
+                      its square background) spinning as the loading indicator. */}
+                  <svg
+                    viewBox="11 11 42 42"
+                    className="block w-16 h-16 mx-auto mb-4 animate-spin"
+                    style={{ animationDuration: '2s', filter: 'drop-shadow(0 0 8px rgba(0,229,255,0.45))' }}
+                    aria-label="Loading"
+                  >
+                    <defs>
+                      <linearGradient id="loaderLetterGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#FFD700" />
+                        <stop offset="100%" stopColor="#8B8BD4" />
+                      </linearGradient>
+                      <radialGradient id="loaderBallGradient" cx="35%" cy="30%" r="75%">
+                        <stop offset="0%" stopColor="#2a2a8a" />
+                        <stop offset="70%" stopColor="#12124d" />
+                      </radialGradient>
+                    </defs>
+                    <circle cx="32" cy="32" r="19.5" fill="url(#loaderBallGradient)" stroke="#00E5FF" strokeWidth="2.5" strokeOpacity="0.75" />
+                    <text x="32" y="41" fontFamily="Arial, sans-serif" fontSize="26" fontWeight="700" textAnchor="middle" fill="url(#loaderLetterGradient)">N</text>
+                  </svg>
                   <p className="text-[#5C5C9E] tracking-wider uppercase text-sm">Connecting...</p>
                 </>
               )}
