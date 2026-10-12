@@ -1,7 +1,9 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { usePageMeta } from '../hooks/usePageMeta'
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
+import NoxLoader from '../components/NoxLoader';
 
 function Leaderboard() {
     usePageMeta(
@@ -11,6 +13,7 @@ function Leaderboard() {
   const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   // Multiple profile rows can change in the same instant (several
   // games finishing around the same time) — each one fires its own
   // realtime event, so without this a burst of wins would trigger a
@@ -21,10 +24,19 @@ function Leaderboard() {
   const fetchLeaderboard = useCallback(() => {
     return supabase.from('profiles')
       .select('username, games_played, games_won, total_winnings')
+      // Only accounts that have actually played a recorded game —
+      // signed-in players only, since guests never get stats.
+      .gt('games_played', 0)
       .order('total_winnings', { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        if (data) setPlayers(data);
+      .then(({ data, error }) => {
+        if (error) {
+          // Keep whatever was already on screen; only flag the failure.
+          setLoadFailed(true);
+        } else {
+          setLoadFailed(false);
+          if (data) setPlayers(data);
+        }
         setLoading(false);
       });
   }, []);
@@ -67,7 +79,7 @@ function Leaderboard() {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: '40px', height: '40px', border: '2px solid #00E5FF', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <NoxLoader size={88} label="Loading leaderboard" />
       </div>
     );
   }
@@ -87,12 +99,34 @@ function Leaderboard() {
         )}
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-        <a href="/" style={{ color: '#5C5C9E', fontSize: '13px', textDecoration: 'none' }}>Back to Lobby</a>
+        {/* A real <a href> reloads the whole app (a blank flash every
+            time); Link switches pages inside the app instead. */}
+        <Link to="/" style={{ color: '#5C5C9E', fontSize: '13px', textDecoration: 'none' }}>Back to Lobby</Link>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 80px 100px', padding: '10px 16px', color: '#5C5C9E', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <span>#</span><span>Player</span><span>Played</span><span>Wins</span><span>Winnings</span>
         </div>
+        {players.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '56px 16px', color: '#5C5C9E' }}>
+            <p style={{ fontSize: '15px', color: '#8B8BD4', margin: '0 0 8px', letterSpacing: '0.05em' }}>
+              {loadFailed ? "Couldn't load the leaderboard." : 'No ranked players yet.'}
+            </p>
+            <p style={{ fontSize: '13px', margin: 0 }}>
+              {loadFailed
+                ? 'Check your connection and try again.'
+                : 'Sign in, play a game, and win to take the first spot.'}
+            </p>
+            {loadFailed && (
+              <button
+                onClick={fetchLeaderboard}
+                style={{ marginTop: '16px', padding: '8px 20px', fontSize: '13px', color: '#00E5FF', background: 'transparent', border: '1px solid rgba(0,229,255,0.5)', borderRadius: '10px', cursor: 'pointer' }}
+              >
+                Try again
+              </button>
+            )}
+          </div>
+        )}
         {players.map((p, i) => (
           <motion.div key={p.username ?? i} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
             style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 80px 100px', padding: '12px 16px', backgroundColor: i < 3 ? 'rgba(255,215,0,0.05)' : 'transparent', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)', color: '#fff', fontSize: '14px', alignItems: 'center' }}>

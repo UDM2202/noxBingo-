@@ -18,6 +18,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useSolanaContract, getSolUsdPrice } from '../hooks/useSolanaContract';
 import { bundleOrenPrice, bundleSolPrice } from '../utils/cardBundles';
 import { getLetterForNumber } from '../utils/gameLogic';
+import NoxLoader from '../components/NoxLoader';
 
 function GameRoom() {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -30,7 +31,7 @@ function GameRoom() {
 
   const { state: soloState, dispatch, deployCards } = useGameReducer();
   const multi = useMultiplayer();
-  const { publicKey, connect, connecting, wallet } = useWallet();
+  const { publicKey, connect, connecting, wallet, signMessage } = useWallet();
   const location = useLocation();
   // Inside the Farcaster Mini App, FarcasterSolanaProvider auto-selects
   // the wallet already — no picker needed or wanted there. Forcing our
@@ -62,7 +63,12 @@ function GameRoom() {
   const [victoryPhase, setVictoryPhase] = useState<'winning-cell' | 'card-scale' | 'caller-freeze' | 'overlay' | null>(null);
   const victoryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { play, speakNumber, soundEnabled, toggleSound, voicePreset, changeVoice, previewVoice } = useAudio();
-  const { saveGameResult, getBalance } = useAuth();
+  const { saveGameResult, getBalance, user: authUser, loading: authLoading } = useAuth();
+  // "Play as Guest" = solo while signed out: a free practice game, no
+  // wallet, no payment, no prizes. The server makes the final call (it
+  // sends multi.practice), this just keeps the payment screen from showing.
+  const isGuestSolo = mode === 'solo' && !authLoading && !authUser;
+  const isPractice = multi.practice || isGuestSolo;
 
   const prevDrawIndex = useRef(-1);
   const prevPhase = useRef(soloState.phase);
@@ -127,12 +133,41 @@ function GameRoom() {
   // If the wallet connects after the room's already been created/joined,
   // push the address up once it lands — needed so the server knows
   // where to send a payout if this player wins.
-  useEffect(() => {
-    if (isMultiplayer && publicKey && multi.playerId && !hasSyncedWallet.current) {
-      hasSyncedWallet.current = true;
-      multi.setWallet(publicKey.toBase58());
+  // The server only accepts a wallet that has signed its one-time
+  // challenge, which proves the player controls it (otherwise anyone could
+  // name someone else's wallet and claim their on-chain payment).
+  const [walletProofError, setWalletProofError] = useState<string | null>(null);
+  const [verifyingWallet, setVerifyingWallet] = useState(false);
+  const syncedWalletKey = useRef<string | null>(null);
+
+  async function verifyWallet() {
+    if (!publicKey || !multi.walletChallenge) return;
+    if (!signMessage) {
+      setWalletProofError('This wallet cannot sign messages, so it cannot be verified. Try Phantom or Solflare.');
+      return;
     }
-  }, [isMultiplayer, publicKey, multi.playerId]);
+    setVerifyingWallet(true);
+    setWalletProofError(null);
+    try {
+      const sig = await signMessage(new TextEncoder().encode(multi.walletChallenge));
+      let bin = '';
+      sig.forEach(b => { bin += String.fromCharCode(b); });
+      multi.setWallet(publicKey.toBase58(), btoa(bin));
+    } catch (err) {
+      console.error('Wallet verification failed:', err);
+      setWalletProofError('Wallet verification was cancelled. Tap "Verify wallet" to try again.');
+    } finally {
+      setVerifyingWallet(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!isMultiplayer || isPractice || !publicKey || !multi.playerId || !multi.walletChallenge) return;
+    const key = publicKey.toBase58();
+    if (syncedWalletKey.current === key) return;
+    syncedWalletKey.current = key;
+    void verifyWallet();
+  }, [isMultiplayer, isPractice, publicKey, multi.playerId, multi.walletChallenge]);
 
   useEffect(() => {
     if (!isMultiplayer && roomCode === 'new') {
@@ -184,6 +219,8 @@ function GameRoom() {
   if (isMultiplayer && multi.playerId && !myPlayerId.current) {
     myPlayerId.current = multi.playerId;
   }
+  const meInRoom = multi.players.find(p => p.id === (myPlayerId.current || multi.playerId));
+  const walletVerified = !!publicKey && meInRoom?.walletAddress === publicKey.toBase58();
   const displayRoomCode = isMultiplayer ? multi.roomCode : soloState.roomCode || roomCode || '------';
 
   useEffect(() => {
@@ -292,11 +329,11 @@ function GameRoom() {
   useEffect(() => {
     if (mode !== 'solo' || hasAutoStartedSolo.current) return;
     const me = multi.players.find(p => p.id === (myPlayerId.current || multi.playerId));
-    if (me?.walletAddress && me.paidEntryFee && multi.phase === 'lobby') {
+    if ((multi.practice || (me?.walletAddress && me.paidEntryFee)) && multi.phase === 'lobby') {
       hasAutoStartedSolo.current = true;
       multi.startGame();
     }
-  }, [mode, multi.players, multi.phase, multi.playerId]);
+  }, [mode, multi.players, multi.phase, multi.playerId, multi.practice]);
 
   // Fetch a live SOL price whenever SOL is selected, so the quote
   // shown before signing is accurate — the server re-fetches this
@@ -385,10 +422,10 @@ function GameRoom() {
               {multi.players.map(p => (
                 <p key={p.id} className="text-white text-lg flex items-center gap-2">
                   {p.name} {p.id === (myPlayerId.current || multi.playerId) ? '(You)' : ''}
-                  {!p.walletAddress && (
+                  {!isPractice && !p.walletAddress && (
                     <span style={{ color: '#5C5C9E', fontSize: '12px' }}>(no wallet)</span>
                   )}
-                  {p.walletAddress && !p.paidEntryFee && (
+                  {!isPractice && p.walletAddress && !p.paidEntryFee && (
                     <span style={{ color: '#FFD700', fontSize: '12px' }}>(unpaid)</span>
                   )}
                   {p.paidEntryFee && (
@@ -408,6 +445,18 @@ function GameRoom() {
               ))}
             </div>
 
+            {isPractice && (
+              <div className="flex flex-col items-center gap-2">
+                <p style={{ color: '#00E5FF', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700 }}>
+                  Free practice game
+                </p>
+                <p style={{ color: '#8B8BD4', fontSize: '13px', textAlign: 'center', maxWidth: '300px' }}>
+                  No wallet and no payment needed. Practice games have no prizes. Sign in to play for OREN.
+                </p>
+              </div>
+            )}
+
+            {!isPractice && (<>
             <div className="flex flex-col items-center gap-2">
               {isFarcasterMiniApp ? (
                 !publicKey && (
@@ -446,7 +495,35 @@ function GameRoom() {
               )}
             </div>
 
-            {publicKey && !(multi.players.find(p => p.id === (myPlayerId.current || multi.playerId))?.paidEntryFee) && (
+            {publicKey && !walletVerified && (
+              <div className="flex flex-col items-center gap-2">
+                <p style={{ color: '#8B8BD4', fontSize: '13px', textAlign: 'center', maxWidth: '280px' }}>
+                  Verify that this wallet is yours. Your wallet will ask you to sign a message. It is free and does not move any funds.
+                </p>
+                <motion.button
+                  onClick={verifyWallet}
+                  disabled={verifyingWallet || !multi.walletChallenge}
+                  style={{
+                    padding: '10px 28px',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    backgroundColor: 'rgba(0,229,255,0.1)',
+                    border: '1px solid rgba(0,229,255,0.4)',
+                    borderRadius: '10px',
+                    color: '#00E5FF',
+                    cursor: verifyingWallet ? 'wait' : 'pointer',
+                    opacity: verifyingWallet ? 0.6 : 1,
+                  }}
+                >
+                  {verifyingWallet ? 'Waiting for wallet…' : 'Verify wallet'}
+                </motion.button>
+                {walletProofError && (
+                  <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>{walletProofError}</p>
+                )}
+              </div>
+            )}
+
+            {publicKey && walletVerified && !(multi.players.find(p => p.id === (myPlayerId.current || multi.playerId))?.paidEntryFee) && (
               <div className="flex flex-col items-center gap-3">
                 <p style={{ color: '#5C5C9E', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   Choose your cards
@@ -553,9 +630,23 @@ function GameRoom() {
               </div>
             )}
 
+            </>)}
+
             {(() => {
               const notReady = multi.players.filter(p => !p.walletAddress || !p.paidEntryFee);
               const allReady = notReady.length === 0;
+
+              if (isPractice) {
+                return (
+                  <p style={{ color: '#8B8BD4', fontSize: '13px', textAlign: 'center' }}>
+                    {multi.practice
+                      ? 'Starting your practice game…'
+                      : multi.roomCode
+                        ? 'Practice games are not available on this server yet. Restart or redeploy the game server with the latest files.'
+                        : 'Setting up your practice game…'}
+                  </p>
+                );
+              }
 
               if (mode === 'solo') {
                 return !allReady ? (
@@ -668,36 +759,7 @@ function GameRoom() {
 
         {isMultiplayer && phase === 'idle' && (
           <div className="fixed inset-0 flex items-center justify-center pointer-events-none">
-            <div className="flex flex-col items-center text-center">
-              {multi.error ? (
-                <p style={{ color: '#FF6464', fontSize: '15px', maxWidth: '280px' }}>{multi.error}</p>
-              ) : (
-                <>
-                  {/* NoxBingo logo (same artwork as public/favicon.svg, minus
-                      its square background) spinning as the loading indicator. */}
-                  <svg
-                    viewBox="11 11 42 42"
-                    className="block w-16 h-16 mx-auto mb-4 animate-spin"
-                    style={{ animationDuration: '2s', filter: 'drop-shadow(0 0 8px rgba(0,229,255,0.45))' }}
-                    aria-label="Loading"
-                  >
-                    <defs>
-                      <linearGradient id="loaderLetterGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#FFD700" />
-                        <stop offset="100%" stopColor="#8B8BD4" />
-                      </linearGradient>
-                      <radialGradient id="loaderBallGradient" cx="35%" cy="30%" r="75%">
-                        <stop offset="0%" stopColor="#2a2a8a" />
-                        <stop offset="70%" stopColor="#12124d" />
-                      </radialGradient>
-                    </defs>
-                    <circle cx="32" cy="32" r="19.5" fill="url(#loaderBallGradient)" stroke="#00E5FF" strokeWidth="2.5" strokeOpacity="0.75" />
-                    <text x="32" y="41" fontFamily="Arial, sans-serif" fontSize="26" fontWeight="700" textAnchor="middle" fill="url(#loaderLetterGradient)">N</text>
-                  </svg>
-                  <p className="text-[#5C5C9E] tracking-wider uppercase text-sm">Connecting...</p>
-                </>
-              )}
-            </div>
+            <NoxLoader size={64} label="Connecting..." />
           </div>
         )}
       </div>

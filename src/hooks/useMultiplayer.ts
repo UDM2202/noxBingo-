@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { BingoCard } from '../types/game';
 import { CARD_BUNDLES, DEFAULT_OREN_TO_GBP_RATE, DEFAULT_GBP_TO_USDT_RATE, type CardBundle } from '../utils/cardBundles';
+import { supabase } from '../lib/supabase';
 type ServerMessage = {
   type: string;
   [key: string]: any;
@@ -58,11 +59,22 @@ type MultiplayerState = {
   jackpotWonAmount: number | null;
   jackpotSignature: string | null;
   jackpotError: string | null;
+  // True for a free practice game (solo, not signed in): no wallet, no
+  // payment, no prizes. Decided by the server.
+  practice: boolean;
+  // One-time message the server asks the wallet to sign, proving the
+  // player controls the address they connect.
+  walletChallenge: string | null;
 };
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
 export function useMultiplayer() {
   const wsRef = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
+  const pendingRef = useRef<string[]>([]);
+  // Settles once the sign-in check has been sent (or skipped for guests).
+  // Room requests wait for it, so the server always knows whether this
+  // player is signed in before it creates a room.
+  const identifyRef = useRef<Promise<void>>(Promise.resolve());
   const [state, setState] = useState<MultiplayerState>({
     connected: false,
     roomCode: null,
@@ -99,15 +111,41 @@ export function useMultiplayer() {
     jackpotWonAmount: null,
     jackpotSignature: null,
     jackpotError: null,
+    practice: false,
+    walletChallenge: null,
   });
   useEffect(() => {
     mountedRef.current = true;
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
+    // Tell the server who is signed in, so wins count toward the
+    // leaderboard. Guests have no session, so nothing is sent and they
+    // are never ranked. Uses addEventListener (not onopen) because
+    // sendWhenReady below replaces ws.onopen — a listener added this
+    // way is left alone by that.
+    ws.addEventListener('open', () => {
+      identifyRef.current = supabase.auth
+        .getSession()
+        .then(({ data }) => {
+          const token = data.session?.access_token;
+          if (token && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'identify', accessToken: token }));
+          }
+        })
+        .catch(() => { /* not signed in, or auth unavailable — play as guest */ });
+    });
     ws.onopen = () => {
       if (mountedRef.current) {
         setState(prev => ({ ...prev, connected: true, error: null }));
       }
+      // Send anything the page asked for before the socket was ready.
+      void identifyRef.current.then(() => {
+        const queued = pendingRef.current;
+        pendingRef.current = [];
+        queued.forEach(p => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(p);
+        });
+      });
     };
     ws.onmessage = (event) => {
       if (!mountedRef.current) return;
@@ -127,6 +165,7 @@ export function useMultiplayer() {
               gbpToUsdtRate: message.gbpToUsdtRate ?? prev.gbpToUsdtRate,
               jackpotEnabled: message.jackpotEnabled ?? prev.jackpotEnabled,
               jackpotAmountOren: message.jackpotAmountOren ?? prev.jackpotAmountOren,
+              practice: (message as { practice?: boolean }).practice === true,
               phase: 'lobby',
             };
           case 'player_joined':
@@ -194,6 +233,8 @@ export function useMultiplayer() {
                 ? "You were removed for not paying the entry fee in time."
                 : "You were removed from the room by the host.",
             };
+          case 'wallet_challenge':
+            return { ...prev, walletChallenge: message.message };
           case 'error':
             return { ...prev, error: message.message };
           default:
@@ -215,9 +256,14 @@ export function useMultiplayer() {
     const ws = wsRef.current;
     if (!ws) return;
     if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(payload));
+      void identifyRef.current.then(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+      });
     } else {
-      ws.onopen = () => ws.send(JSON.stringify(payload));
+      // Queue it. The old code replaced ws.onopen here, which meant the
+      // "connected" flag never got set and the screen stayed on
+      // "Connecting..." forever.
+      pendingRef.current.push(JSON.stringify(payload));
     }
   };
   const createRoom = useCallback((playerName: string, walletAddress?: string | null, maxPlayers?: number, isSolo?: boolean) => {
@@ -226,8 +272,8 @@ export function useMultiplayer() {
   const joinRoom = useCallback((roomCode: string, playerName: string, walletAddress?: string | null) => {
     sendWhenReady({ type: 'join_room', roomCode: roomCode.toUpperCase(), playerName, walletAddress });
   }, []);
-  const setWallet = useCallback((walletAddress: string) => {
-    wsRef.current?.send(JSON.stringify({ type: 'set_wallet', walletAddress }));
+  const setWallet = useCallback((walletAddress: string, walletSignature?: string) => {
+    wsRef.current?.send(JSON.stringify({ type: 'set_wallet', walletAddress, walletSignature }));
   }, []);
   const submitEntryFee = useCallback((txSignature: string, bundleId: string, currency: 'OREN' | 'SOL') => {
     wsRef.current?.send(JSON.stringify({ type: 'submit_entry_fee', txSignature, bundleId, currency }));
@@ -250,7 +296,7 @@ export function useMultiplayer() {
       bundles: CARD_BUNDLES, orenToGbpRate: DEFAULT_OREN_TO_GBP_RATE, gbpToUsdtRate: DEFAULT_GBP_TO_USDT_RATE,
       jackpotEnabled: false, jackpotAmountOren: 0,
       jackpotWon: false, jackpotWinnerId: null, jackpotWinnerName: null,
-      jackpotWonAmount: null, jackpotSignature: null, jackpotError: null,
+      jackpotWonAmount: null, jackpotSignature: null, jackpotError: null, practice: false,
     }));
   }, []);
   return { ...state, createRoom, joinRoom, setWallet, submitEntryFee, removePlayer, startGame, leaveRoom };

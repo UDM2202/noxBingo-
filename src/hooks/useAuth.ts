@@ -20,23 +20,19 @@ export function useAuth() {
   }, []);
 
   const signUp = async (email: string, password: string, username: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // The username travels with the signup; a database trigger creates the
+    // profile row (the browser is not allowed to insert one itself).
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { username } },
+    });
     if (error) return { error: error.message };
-    
-    if (data.user) {
-      await supabase.from('profiles').insert({
-        id: data.user.id,
-        username,
-        balance: 1000,
-      });
-    }
     return { error: null };
   };
 
   const signIn = async (email: string, password: string) => {
-    console.log('Attempting sign in:', email);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    console.log('Sign in result:', data, error);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message || null };
   };
 
@@ -50,28 +46,12 @@ export function useAuth() {
     return data?.balance || 1000;
   };
 
-  const updateBalance = async (amount: number) => {
-    if (!user) return;
-    const currentBalance = await getBalance();
-    await supabase.from('profiles').update({ balance: currentBalance + amount }).eq('id', user.id);
-  };
+  // Balance is server-controlled now; browser edits are ignored by the database.
+  const updateBalance = async (_amount: number) => {};
 
-  const saveGameResult = async (result: 'win' | 'loss' | 'bonus', prizeAmount: number, _roomCode?: string, _mode?: string) => {
-    if (!user) return;
-    
-    // Update profile stats
-    if (result === 'win') {
-      await supabase.rpc('increment_wins', { user_id: user.id });
-    }
-    await supabase.rpc('increment_games', { user_id: user.id });
-    await updateBalance(prizeAmount);
-    
-    if (prizeAmount > 0) {
-      await supabase.rpc('add_winnings', { user_id: user.id, amount: prizeAmount });
-    }
-  };
+  // Wins, games played and winnings are recorded by the game server, which
+  // knows who really won. The browser no longer reports them.
+  const saveGameResult = async (_result: 'win' | 'loss' | 'bonus', _prizeAmount: number, _roomCode?: string, _mode?: string) => {};
 
   return { user, loading, signUp, signIn, signOut, getBalance, updateBalance, saveGameResult };
 }
-
-

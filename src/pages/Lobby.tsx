@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom'
+﻿import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { useWallet } from '@solana/wallet-adapter-react'
@@ -8,6 +8,7 @@ import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { useSolanaContract } from '../hooks/useSolanaContract'
 import { usePageMeta } from '../hooks/usePageMeta'
+import NoxLoader from '../components/NoxLoader'
 
 function Lobby() {
   usePageMeta(
@@ -70,16 +71,7 @@ function Lobby() {
           justifyContent: 'center',
         }}
       >
-        <div
-          style={{
-            width: '40px',
-            height: '40px',
-            border: '2px solid #00E5FF',
-            borderTopColor: 'transparent',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-          }}
-        />
+        <NoxLoader size={88} />
       </div>
     )
   }
@@ -630,12 +622,12 @@ function Lobby() {
                 Play Solo
               </motion.button>
               <div style={{ marginTop: '16px' }}>
-                <a
-                  href="/leaderboard"
+                <Link
+                  to="/leaderboard"
                   style={{ color: '#5C5C9E', fontSize: '12px', textDecoration: 'none' }}
                 >
                   View Leaderboard
-                </a>
+                </Link>
               </div>
             </motion.div>
           </>
@@ -684,12 +676,12 @@ function Lobby() {
               </button>
             </div>
             <div style={{ marginTop: '16px' }}>
-              <a
-                href="/leaderboard"
+              <Link
+                to="/leaderboard"
                 style={{ color: '#5C5C9E', fontSize: '12px', textDecoration: 'none' }}
               >
                 View Leaderboard
-              </a>
+              </Link>
             </div>
           </div>
         )}
