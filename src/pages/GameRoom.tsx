@@ -74,7 +74,6 @@ function GameRoom() {
   const prevPhase = useRef(soloState.phase);
   const hasPlayedGameStart = useRef(false);
   const hasConnected = useRef(false);
-  const hasSyncedWallet = useRef(false);
   const hasAutoStartedSolo = useRef(false);
 
   // Solo now goes through the exact same server-authoritative room
