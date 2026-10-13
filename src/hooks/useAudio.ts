@@ -1,11 +1,47 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
+
 let audioCtx: AudioContext | null = null;
 function getAudioContext(): AudioContext {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
   }
+  // Browsers (and Farcaster/wallet in-app browsers) start audio paused
+  // until the player taps something. Resuming here is harmless if it's
+  // already running, and the unlock listener below handles the first tap.
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
   return audioCtx;
 }
+
+/**
+ * Unlocks audio on the player's first tap or key press. iOS also needs a
+ * sound to actually be started inside that tap, so a one-sample silent
+ * buffer is played. Listeners remove themselves once audio is running.
+ */
+let unlockInstalled = false;
+function installAudioUnlock() {
+  if (unlockInstalled || typeof window === 'undefined') return;
+  unlockInstalled = true;
+  const events = ['pointerdown', 'touchend', 'keydown', 'click'] as const;
+  const unlock = () => {
+    try {
+      const ctx = getAudioContext();
+      const silent = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = silent;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.resume().then(() => {
+        if (ctx.state === 'running') {
+          events.forEach((e) => window.removeEventListener(e, unlock, true));
+        }
+      }).catch(() => {});
+    } catch {}
+  };
+  events.forEach((e) => window.addEventListener(e, unlock, true));
+}
+
 function playTone(frequency: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.3, rampDown: boolean = true) {
   try {
     const ctx = getAudioContext();
@@ -94,6 +130,7 @@ function playWinFanfare() {
     bass.stop(ctx.currentTime + 0.8);
   } catch {}
 }
+
 export type VoicePreset = 'male' | 'female' | 'robot' | 'alien' | 'whisper' | 'announcer';
 export const VOICE_PRESETS: { id: VoicePreset; label: string; emoji: string; description: string }[] = [
   { id: 'male', label: 'Male', emoji: '\u{1F468}', description: 'Deep, warm voice' },
@@ -103,57 +140,117 @@ export const VOICE_PRESETS: { id: VoicePreset; label: string; emoji: string; des
   { id: 'whisper', label: 'Whisper', emoji: '\u{1F92B}', description: 'Soft, intimate call' },
   { id: 'announcer', label: 'Announcer', emoji: '\u{1F4E2}', description: 'Hype sports announcer' },
 ];
-// Store voices once loaded
-let cachedVoices: SpeechSynthesisVoice[] = [];
+const VALID_PRESETS = new Set<string>(VOICE_PRESETS.map((p) => p.id));
+
+/*
+ * Caller voices are pre-recorded clips, not the browser's speechSynthesis.
+ * speechSynthesis is missing or silent in Farcaster and wallet in-app
+ * browsers, while Web Audio (which the sound effects above already use)
+ * works everywhere.
+ *
+ * Each preset is one MP3 in public/voices/<preset>.mp3 holding all 75
+ * calls in order. Every call sits in a fixed slot of SLOT_SECONDS, so
+ * call N starts at (N - 1) * SLOT_SECONDS. If the clips are ever
+ * regenerated with a different slot length, update this number.
+ */
+const SLOT_SECONDS = 1.9;
+const voiceUrl = (preset: VoicePreset) => `${import.meta.env.BASE_URL}voices/${preset}.mp3`;
+
+// Shared across hook instances so each preset downloads and decodes once.
+const voiceBuffers = new Map<VoicePreset, AudioBuffer>();
+const voiceLoads = new Map<VoicePreset, Promise<AudioBuffer | null>>();
+
+function loadVoice(preset: VoicePreset): Promise<AudioBuffer | null> {
+  const ready = voiceBuffers.get(preset);
+  if (ready) return Promise.resolve(ready);
+  const inFlight = voiceLoads.get(preset);
+  if (inFlight) return inFlight;
+
+  const load = fetch(voiceUrl(preset))
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status} loading ${preset} voice`);
+      return res.arrayBuffer();
+    })
+    // Callback form keeps older Safari happy; newer browsers accept it too.
+    .then((data) => new Promise<AudioBuffer>((resolve, reject) => {
+      getAudioContext().decodeAudioData(data, resolve, reject);
+    }))
+    .then((buffer) => {
+      voiceBuffers.set(preset, buffer);
+      return buffer;
+    })
+    .catch((err) => {
+      console.error('Caller voice failed to load', preset, err);
+      voiceLoads.delete(preset); // allow a retry on the next call
+      return null;
+    });
+
+  voiceLoads.set(preset, load);
+  return load;
+}
+
+// How long a call may wait for its voice file before being skipped, so a
+// slow download never makes the caller announce an old number late.
+const MAX_CALL_DELAY_MS = 1500;
+
+function readStoredPreset(): VoicePreset {
+  try {
+    const stored = localStorage.getItem('noxbingo-voice');
+    if (stored && VALID_PRESETS.has(stored)) return stored as VoicePreset;
+  } catch {}
+  return 'male';
+}
 
 export function useAudio() {
-  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('noxbingo-sound') !== 'false');
-  const [voicePreset, setVoicePreset] = useState<VoicePreset>(() => (localStorage.getItem('noxbingo-voice') as VoicePreset) || 'male');
-  const [voicesReady, setVoicesReady] = useState(false);
-  const speechSynthRef = useRef<SpeechSynthesis | null>(null);
-  // Load voices on mount
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    try { return localStorage.getItem('noxbingo-sound') !== 'false'; } catch { return true; }
+  });
+  const [voicePreset, setVoicePreset] = useState<VoicePreset>(readStoredPreset);
+  const [voicesReady, setVoicesReady] = useState(() => voiceBuffers.has(voicePreset));
+  const currentVoiceRef = useRef<AudioBufferSourceNode | null>(null);
+  const callIdRef = useRef(0);
+
+  useEffect(() => { installAudioUnlock(); }, []);
+
+  // Download the selected voice ahead of the first call.
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    speechSynthRef.current = window.speechSynthesis;
-    const loadVoices = () => {
-      cachedVoices = speechSynthRef.current?.getVoices() || [];
-      if (cachedVoices.length > 0) {
-        setVoicesReady(true);
-        console.log('Voices loaded:', cachedVoices.length, 'English voices:', cachedVoices.filter(v => v.lang.startsWith('en')).map(v => v.name));
-      }
-    };
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    return () => {
-      window.speechSynthesis.onvoiceschanged = null;
-    };
+    let cancelled = false;
+    setVoicesReady(voiceBuffers.has(voicePreset));
+    loadVoice(voicePreset).then((buffer) => {
+      if (!cancelled) setVoicesReady(!!buffer);
+    });
+    return () => { cancelled = true; };
+  }, [voicePreset]);
+
+  const stopVoice = useCallback(() => {
+    try { currentVoiceRef.current?.stop(); } catch {}
+    currentVoiceRef.current = null;
   }, []);
-  const getVoiceForPreset = useCallback((preset: VoicePreset): SpeechSynthesisVoice | null => {
-    const englishVoices = cachedVoices.filter(v => v.lang.startsWith('en'));
-    if (englishVoices.length === 0) return null;
-    switch (preset) {
-      case 'female':
-        // Microsoft Zira or Google UK English Female
-        return englishVoices.find(v => /zira|female/i.test(v.name)) || englishVoices[0];
-      case 'male':
-        // Microsoft David or Google UK English Male
-        return englishVoices.find(v => /david|male/i.test(v.name)) || englishVoices[0];
-      case 'announcer':
-        // Google US English sounds most natural
-        return englishVoices.find(v => /google.*us|google.*english/i.test(v.name)) || englishVoices[0];
-      case 'robot':
-        // Use deepest available voice + low pitch
-        return englishVoices.find(v => /david|male/i.test(v.name)) || englishVoices[0];
-      case 'alien':
-        // Use female voice + very high pitch
-        return englishVoices.find(v => /zira|female/i.test(v.name)) || englishVoices[0];
-      case 'whisper':
-        // Any voice, volume handles the effect
-        return englishVoices[0];
-      default:
-        return englishVoices[0];
-    }
-  }, []);
+
+  const playCall = useCallback((preset: VoicePreset, number: number, maxDelayMs = MAX_CALL_DELAY_MS) => {
+    if (!Number.isInteger(number) || number < 1 || number > 75) return;
+    const callId = ++callIdRef.current;
+    const requestedAt = Date.now();
+    stopVoice(); // a new call always cuts off the previous one
+
+    loadVoice(preset).then((buffer) => {
+      if (!buffer) return;
+      if (callId !== callIdRef.current) return; // a newer call replaced this one
+      if (Date.now() - requestedAt > maxDelayMs) return;
+      try {
+        const ctx = getAudioContext();
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(ctx.destination);
+        src.start(ctx.currentTime, (number - 1) * SLOT_SECONDS, SLOT_SECONDS);
+        src.onended = () => {
+          if (currentVoiceRef.current === src) currentVoiceRef.current = null;
+        };
+        currentVoiceRef.current = src;
+      } catch {}
+    });
+  }, [stopVoice]);
+
   const play = useCallback((sound: string) => {
     if (!soundEnabled) return;
     switch (sound) {
@@ -164,79 +261,34 @@ export function useAudio() {
       case 'daub': playTone(1000, 0.05, 'sine', 0.1, true); break;
     }
   }, [soundEnabled]);
-  const speakNumber = useCallback((letter: string, number: number) => {
+
+  // `letter` is kept so existing callers don't change; the clip for each
+  // number already says its letter (B for 1-15, I for 16-30, and so on).
+  const speakNumber = useCallback((_letter: string, number: number) => {
     if (!soundEnabled) return;
-    try {
-      if (!speechSynthRef.current) speechSynthRef.current = window.speechSynthesis;
-      // Force reload voices if cache is empty
-      if (cachedVoices.length === 0) {
-        cachedVoices = speechSynthRef.current.getVoices();
-      }
-      speechSynthRef.current.cancel();
-      const utterance = new SpeechSynthesisUtterance(letter + '. ' + number);
-      utterance.lang = 'en-US';
-      // Set voice based on preset
-      const voice = getVoiceForPreset(voicePreset);
-      if (voice) {
-        utterance.voice = voice;
-      }
-      // Apply pitch/rate/volume modifiers. Web Speech API valid
-      // ranges: pitch 0–2 (default 1), rate 0.1–10 (default 1),
-      // volume 0–1. A value outside these gets silently clamped or
-      // reset by the browser with no error — that's exactly what was
-      // happening to 'alien' (pitch was set to 2.5, past the max of
-      // 2), which is why it never actually sounded distinct.
-      switch (voicePreset) {
-        case 'male':
-          utterance.rate = 0.85;
-          utterance.pitch = 1.0;
-          utterance.volume = 0.8;
-          break;
-        case 'female':
-          utterance.rate = 0.9;
-          utterance.pitch = 1.5;
-          utterance.volume = 0.75;
-          break;
-        case 'robot':
-          utterance.rate = 0.6;
-          utterance.pitch = 0.2;
-          utterance.volume = 0.9;
-          break;
-        case 'alien':
-          utterance.rate = 0.4;
-          utterance.pitch = 2.0;
-          utterance.volume = 0.7;
-          break;
-        case 'whisper':
-          utterance.rate = 0.5;
-          utterance.pitch = 1.0;
-          utterance.volume = 0.12;
-          break;
-        case 'announcer':
-          utterance.rate = 1.0;
-          utterance.pitch = 1.2;
-          utterance.volume = 1.0;
-          break;
-      }
-      speechSynthRef.current.speak(utterance);
-    } catch {}
-  }, [soundEnabled, voicePreset, getVoiceForPreset]);
+    playCall(voicePreset, number);
+  }, [soundEnabled, voicePreset, playCall]);
+
   const toggleSound = useCallback(() => {
     setSoundEnabled(prev => {
       const next = !prev;
-      localStorage.setItem('noxbingo-sound', String(next));
+      try { localStorage.setItem('noxbingo-sound', String(next)); } catch {}
+      if (!next) stopVoice();
       return next;
     });
-  }, []);
+  }, [stopVoice]);
+
   const changeVoice = useCallback((preset: VoicePreset) => {
     setVoicePreset(preset);
-    localStorage.setItem('noxbingo-voice', preset);
+    try { localStorage.setItem('noxbingo-voice', preset); } catch {}
   }, []);
+
+  // Plays "B 12" in the given voice without changing the saved choice.
   const previewVoice = useCallback((preset: VoicePreset) => {
-    const prevPreset = voicePreset;
-    setVoicePreset(preset);
-    setTimeout(() => speakNumber('B', 12), 200);
-    setTimeout(() => setVoicePreset(prevPreset), 2500);
-  }, [voicePreset, speakNumber]);
+    if (!soundEnabled) return;
+    // A preview can wait longer for a first download than a live call can.
+    playCall(preset, 12, 10000);
+  }, [soundEnabled, playCall]);
+
   return { play, speakNumber, soundEnabled, toggleSound, voicePreset, changeVoice, previewVoice, VOICE_PRESETS, voicesReady };
 }

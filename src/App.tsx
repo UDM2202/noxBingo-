@@ -1,7 +1,8 @@
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useRef, useState, useCallback } from 'react'
 import { Routes, Route, Outlet } from 'react-router-dom'
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react'
+import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react'
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
+import type { Adapter, WalletError } from '@solana/wallet-adapter-base'
 import { clusterApiUrl } from '@solana/web3.js'
 import {
   PhantomWalletAdapter,
@@ -9,7 +10,10 @@ import {
   TrustWalletAdapter,
   CoinbaseWalletAdapter,
 } from '@solana/wallet-adapter-wallets'
-import { FarcasterSolanaProvider } from '@farcaster/mini-app-solana'
+// Side-effect import: when running inside Farcaster, this registers the
+// user's Farcaster Solana wallet with Wallet Standard. Outside Farcaster
+// it registers nothing, so the normal site's wallet list is unaffected.
+import '@farcaster/mini-app-solana'
 import { sdk } from '@farcaster/miniapp-sdk'
 import AnimatedBackground from './components/AnimatedBackground'
 import Lobby from './pages/Lobby'
@@ -19,50 +23,101 @@ import GameRoom from './pages/GameRoom'
 import AdminLogin from './pages/AdminLogin'
 import AdminDashboard from './pages/AdminDashboard'
 
-// Prefer a dedicated RPC (Helius/QuickNode/Alchemy) via env var if set,
-// since the public devnet endpoint rate-limits hard under load. Falls
-// back to the public devnet endpoint if no env var is configured.
-const SOLANA_RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl('devnet')
+// The app is live on mainnet, so the fallback must be mainnet too.
+// Keep VITE_SOLANA_RPC_URL set in Vercel to a dedicated mainnet RPC
+// (Helius/QuickNode/Alchemy); the public endpoint rate-limits hard.
+const SOLANA_RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL || clusterApiUrl('mainnet-beta')
+if (!import.meta.env.VITE_SOLANA_RPC_URL) {
+  console.warn('VITE_SOLANA_RPC_URL is not set; falling back to the public mainnet RPC.')
+}
+
+// Must match the key @farcaster/mini-app-solana writes to, so the
+// Farcaster wallet is remembered and auto-selected.
+const FARCASTER_WALLET_STORAGE_KEY = 'fcWalletName'
+const FARCASTER_WALLET_NAME = 'Farcaster'
+
+type AppEnv = 'checking' | 'miniapp' | 'web'
 
 /**
- * Wraps the normal, browser-visited pages — connects via a real
- * extension wallet (Phantom, Backpack, etc.) the way the whole app
- * has worked all along.
+ * A normal top-level browser tab can never be a Farcaster Mini App, so
+ * the regular site skips the async check entirely and renders instantly.
+ * Only iframes and React Native webviews need the real check.
  */
-function StandardWalletLayout() {
+function initialEnv(): AppEnv {
+  if (typeof window === 'undefined') return 'web'
+  const hasRnWebView = !!(window as unknown as { ReactNativeWebView?: unknown }).ReactNativeWebView
+  if (!hasRnWebView && window === window.parent) return 'web'
+  return 'checking'
+}
+
+/**
+ * Inside Farcaster, picks the Farcaster wallet once so the player is
+ * connected without opening the wallet list. Runs only once per load:
+ * if connecting fails, the error banner explains why instead of this
+ * retrying in a loop.
+ */
+function AutoSelectFarcasterWallet() {
+  const { wallets, wallet, select, connected, connecting } = useWallet()
+  const attempted = useRef(false)
+
+  useEffect(() => {
+    if (attempted.current || wallet || connected || connecting) return
+    const farcaster = wallets.find((w) => w.adapter.name === FARCASTER_WALLET_NAME)
+    if (!farcaster) return
+    attempted.current = true
+    select(farcaster.adapter.name)
+  }, [wallets, wallet, select, connected, connecting])
+
+  return null
+}
+
+type WalletLayoutProps = {
+  env: Exclude<AppEnv, 'checking'>
+  onWalletError: (error: WalletError, adapter?: Adapter) => void
+}
+
+/**
+ * One wallet setup for every route. Which wallets it offers depends on
+ * WHERE the app is running, not which URL is open: inside Farcaster,
+ * every page (lobby, rooms, /miniapp) uses the Farcaster wallet; in a
+ * normal browser, every page uses the extension/mobile wallets.
+ *
+ * Because this layout wraps all routes, moving between pages no longer
+ * tears down the wallet connection.
+ */
+function WalletLayout({ env, onWalletError }: WalletLayoutProps) {
   const endpoint = useMemo(() => SOLANA_RPC_URL, [])
 
-  // Wallet Standard auto-detects wallets that are actually installed
-  // and injected into the browser — but on its own it never lists a
-  // wallet the user DOESN'T have installed, which was the bug: the
-  // modal only ever showed whatever extension happened to already be
-  // present. Explicitly listing adapters here is what makes the
-  // modal's "More options" section show these wallets even when
-  // uninstalled — clicking an uninstalled one takes the user to that
-  // wallet's install page (desktop) or deep-links into its mobile app
-  // (iOS/Android), instead of the option simply not existing.
-  //
-  // Backpack is deliberately NOT in this list — it has no adapter
-  // package in @solana/wallet-adapter-wallets because it supports the
-  // Wallet Standard natively and self-registers in the browser. It
-  // still shows up automatically via Wallet Standard detection when a
-  // visitor actually has it installed; it just can't be given the
-  // "show it even when uninstalled, with an install link" treatment
-  // the explicit adapters below get.
+  // Explicit adapters make uninstalled wallets show under "More options"
+  // with an install link or mobile deep link. They are left out inside
+  // Farcaster, where clicking one would try to leave the Mini App
+  // (to an install page or another app) and leave a blank frame behind.
+  // Backpack self-registers via Wallet Standard when installed.
   const wallets = useMemo(
-    () => [
-      new PhantomWalletAdapter(),
-      new SolflareWalletAdapter(),
-      new TrustWalletAdapter(),
-      new CoinbaseWalletAdapter(),
-    ],
-    []
+    () =>
+      env === 'miniapp'
+        ? []
+        : [
+            new PhantomWalletAdapter(),
+            new SolflareWalletAdapter(),
+            new TrustWalletAdapter(),
+            new CoinbaseWalletAdapter(),
+          ],
+    [env]
   )
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider
+        wallets={wallets}
+        autoConnect
+        onError={onWalletError}
+        localStorageKey={env === 'miniapp' ? FARCASTER_WALLET_STORAGE_KEY : 'walletName'}
+      >
+        {/* GameRoom's WalletMultiButton calls useWalletModal(), so this
+            is needed in both environments. */}
         <WalletModalProvider>
+          {env === 'miniapp' && <AutoSelectFarcasterWallet />}
           <Outlet />
         </WalletModalProvider>
       </WalletProvider>
@@ -71,57 +126,92 @@ function StandardWalletLayout() {
 }
 
 /**
- * Wraps the Farcaster Mini App entry point — FarcasterSolanaProvider
- * connects through whatever Solana wallet the user already has
- * selected inside Farcaster's own client. WalletModalProvider is
- * still needed even here, because GameRoom's WalletMultiButton calls
- * useWalletModal() internally — without this wrapper that hook has
- * nothing to call, so clicking the button silently does nothing at
- * all (no crash, no visible error, just a dead click).
+ * Wallet errors used to go only to the browser console, which is why
+ * clicking a wallet could look like nothing happened. This shows them
+ * on screen, which also matters inside Farcaster where there is no
+ * console to check on a phone.
  */
-function MiniAppLayout() {
-  const endpoint = useMemo(() => SOLANA_RPC_URL, [])
-
-  useEffect(() => {
-    // Tells Farcaster the app has finished loading so it can dismiss
-    // its own splash screen and show this content. Required — the
-    // app stays stuck behind Farcaster's loading state without it.
-    sdk.actions.ready()
-  }, [])
-
+function WalletErrorBanner({ message, onClose }: { message: string; onClose: () => void }) {
   return (
-    <FarcasterSolanaProvider endpoint={endpoint}>
-      <WalletModalProvider>
-        <Outlet />
-      </WalletModalProvider>
-    </FarcasterSolanaProvider>
+    <div
+      role="alert"
+      className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-xl border border-red-400/40 bg-red-950/90 px-4 py-3 text-sm text-red-100 shadow-lg backdrop-blur"
+    >
+      <div className="flex items-start gap-3">
+        <p className="flex-1 break-words">
+          <span className="font-semibold">Wallet couldn't connect.</span> {message}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded px-2 text-red-200 hover:text-white"
+          aria-label="Dismiss"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
   )
 }
 
 function App() {
+  const [env, setEnv] = useState<AppEnv>(initialEnv)
+  const [walletError, setWalletError] = useState<string | null>(null)
+
+  // Resolve whether we're inside Farcaster (only runs for iframes/webviews).
+  useEffect(() => {
+    if (env !== 'checking') return
+    let cancelled = false
+    sdk
+      .isInMiniApp()
+      .then((inside) => {
+        if (!cancelled) setEnv(inside ? 'miniapp' : 'web')
+      })
+      .catch(() => {
+        if (!cancelled) setEnv('web')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [env])
+
+  // Tell Farcaster the app is ready on EVERY route, not just /miniapp.
+  // Previously only /miniapp called this, so opening a room link or the
+  // lobby inside Farcaster left the host waiting, which showed as a
+  // blank white frame on desktop.
+  useEffect(() => {
+    if (env !== 'miniapp') return
+    sdk.actions.ready().catch((err) => console.error('sdk.actions.ready() failed', err))
+  }, [env])
+
+  const handleWalletError = useCallback((error: WalletError, adapter?: Adapter) => {
+    console.error('Wallet error', adapter?.name, error)
+    const detail = error.message || (error.error as Error | undefined)?.message || error.name
+    setWalletError(adapter?.name ? `${adapter.name}: ${detail}` : detail)
+  }, [])
+
   return (
     <div className="relative min-h-screen">
       <AnimatedBackground />
-      <div className="relative z-10">
-        <Routes>
-          <Route element={<StandardWalletLayout />}>
-            <Route path="/" element={<Lobby />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            <Route path="/room/:roomCode" element={<GameRoom />} />
-            <Route path="/admin" element={<AdminLogin />} />
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
-          </Route>
-          <Route element={<MiniAppLayout />}>
-            {/* Solo-only for now — GameRoom's existing mode=solo path
-                already does everything needed (wallet check, bundle
-                picker, payment, server-authoritative draw, payout).
-                Multiplayer inside the embed is a separate feature for
-                later, not something this route needs to support yet. */}
-            <Route path="/miniapp" element={<GameRoom />} />
-          </Route>
-        </Routes>
-      </div>
+      {env !== 'checking' && (
+        <div className="relative z-10">
+          <Routes>
+            <Route element={<WalletLayout env={env} onWalletError={handleWalletError} />}>
+              <Route path="/" element={<Lobby />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/room/:roomCode" element={<GameRoom />} />
+              <Route path="/admin" element={<AdminLogin />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              {/* Solo-only Farcaster entry point (manifest homeUrl). */}
+              <Route path="/miniapp" element={<GameRoom />} />
+            </Route>
+          </Routes>
+        </div>
+      )}
+      {walletError && (
+        <WalletErrorBanner message={walletError} onClose={() => setWalletError(null)} />
+      )}
     </div>
   )
 }
