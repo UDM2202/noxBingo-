@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@solana/wallet-adapter-react'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
@@ -19,6 +19,7 @@ import { useSolanaContract, getSolUsdPrice } from '../hooks/useSolanaContract';
 import { bundleOrenPrice, bundleSolPrice } from '../utils/cardBundles';
 import { getLetterForNumber } from '../utils/gameLogic';
 import NoxLoader from '../components/NoxLoader';
+import { useAppEnv, FARCASTER_WALLET_NAME } from '../appEnv';
 
 function GameRoom() {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -31,23 +32,30 @@ function GameRoom() {
 
   const { state: soloState, dispatch, deployCards } = useGameReducer();
   const multi = useMultiplayer();
-  const { publicKey, connect, connecting, wallet, signMessage } = useWallet();
-  const location = useLocation();
-  // Inside the Farcaster Mini App, FarcasterSolanaProvider auto-selects
-  // the wallet already — no picker needed or wanted there. Forcing our
-  // normal multi-wallet picker (built for choosing among several
-  // installed browser extensions) fights against that and was the
-  // actual cause of the "No address" connect failures.
-  const isFarcasterMiniApp = location.pathname === '/miniapp';
-  const [miniAppConnectError, setMiniAppConnectError] = useState<string | null>(null);
+  const { publicKey, connect, connecting, wallet, wallets, select, signMessage } = useWallet();
+  // Decided by WHERE the app is running (set once in App.tsx), not by the
+  // URL. Inside Farcaster every room page uses the Farcaster wallet, and
+  // the normal multi-wallet picker is never shown.
+  const isFarcasterMiniApp = useAppEnv() === 'miniapp';
+  // The Farcaster wallet only appears in this list when Farcaster has a
+  // Solana wallet to offer for this account.
+  const farcasterWallet = wallets.find(w => w.adapter.name === FARCASTER_WALLET_NAME);
 
   async function handleMiniAppConnect() {
-    setMiniAppConnectError(null);
+    if (!farcasterWallet) return;
     try {
+      if (wallet?.adapter.name !== FARCASTER_WALLET_NAME) {
+        // Selecting is enough: autoConnect in App.tsx connects as soon as
+        // the selection lands. Calling connect() in the same tap would run
+        // before the selection exists and fail with WalletNotSelectedError.
+        select(farcasterWallet.adapter.name);
+        return;
+      }
       await connect();
     } catch (err) {
+      // The on-screen message comes from the wallet error banner in
+      // App.tsx, so it isn't repeated here.
       console.error('Farcaster wallet connect failed:', err);
-      setMiniAppConnectError('No Solana wallet is available in this client. Link one in your Farcaster settings first.');
     }
   }
   const { payEntryFee, payEntryFeeSol } = useSolanaContract();
@@ -142,7 +150,11 @@ function GameRoom() {
   async function verifyWallet() {
     if (!publicKey || !multi.walletChallenge) return;
     if (!signMessage) {
-      setWalletProofError('This wallet cannot sign messages, so it cannot be verified. Try Phantom or Solflare.');
+      setWalletProofError(
+        isFarcasterMiniApp
+          ? 'Your Farcaster wallet cannot sign messages, so it cannot be verified.'
+          : 'This wallet cannot sign messages, so it cannot be verified. Try Phantom or Solflare.'
+      );
       return;
     }
     setVerifyingWallet(true);
@@ -462,7 +474,7 @@ function GameRoom() {
                   <>
                     <motion.button
                       onClick={handleMiniAppConnect}
-                      disabled={connecting}
+                      disabled={connecting || !farcasterWallet}
                       style={{
                         padding: '12px 32px',
                         fontSize: '15px',
@@ -471,15 +483,15 @@ function GameRoom() {
                         border: '1px solid rgba(0,229,255,0.4)',
                         borderRadius: '10px',
                         color: '#00E5FF',
-                        cursor: connecting ? 'wait' : 'pointer',
-                        opacity: connecting ? 0.6 : 1,
+                        cursor: connecting ? 'wait' : farcasterWallet ? 'pointer' : 'not-allowed',
+                        opacity: connecting || !farcasterWallet ? 0.6 : 1,
                       }}
                     >
-                      {connecting ? 'Connecting…' : `Connect${wallet ? ` ${wallet.adapter.name}` : ''}`}
+                      {connecting ? 'Connecting…' : 'Connect Farcaster wallet'}
                     </motion.button>
-                    {miniAppConnectError && (
+                    {!farcasterWallet && (
                       <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '260px' }}>
-                        {miniAppConnectError}
+                        Farcaster hasn't provided a Solana wallet for this account. Open the Wallet tab in Farcaster to set up Solana, then reopen NoxBingo.
                       </p>
                     )}
                   </>

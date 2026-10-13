@@ -22,6 +22,7 @@ import Leaderboard from './pages/Leaderboard'
 import GameRoom from './pages/GameRoom'
 import AdminLogin from './pages/AdminLogin'
 import AdminDashboard from './pages/AdminDashboard'
+import { AppEnvContext, FARCASTER_WALLET_NAME } from './appEnv'
 
 // The app is live on mainnet, so the fallback must be mainnet too.
 // Keep VITE_SOLANA_RPC_URL set in Vercel to a dedicated mainnet RPC
@@ -34,7 +35,6 @@ if (!import.meta.env.VITE_SOLANA_RPC_URL) {
 // Must match the key @farcaster/mini-app-solana writes to, so the
 // Farcaster wallet is remembered and auto-selected.
 const FARCASTER_WALLET_STORAGE_KEY = 'fcWalletName'
-const FARCASTER_WALLET_NAME = 'Farcaster'
 
 type AppEnv = 'checking' | 'miniapp' | 'web'
 
@@ -71,9 +71,38 @@ function AutoSelectFarcasterWallet() {
   return null
 }
 
+// How long a wallet may sit on "Connecting..." before we give up on it.
+const CONNECT_TIMEOUT_MS = 20000
+
+/**
+ * Some Farcaster clients (seen on desktop web) accept the connect request
+ * and never answer it, so the button would spin forever. After a timeout
+ * this cancels the attempt and tells the player why.
+ */
+function ConnectWatchdog({ onTimeout }: { onTimeout: (message: string) => void }) {
+  const { connecting, disconnect, wallet } = useWallet()
+
+  useEffect(() => {
+    if (!connecting) return
+    const walletName = wallet?.adapter.name
+    const timer = window.setTimeout(() => {
+      disconnect().catch(() => {})
+      onTimeout(
+        walletName === FARCASTER_WALLET_NAME
+          ? "Farcaster didn't respond. Try opening NoxBingo in the Farcaster phone app."
+          : `${walletName ?? 'Your wallet'} didn't respond. Check the wallet app and try again.`
+      )
+    }, CONNECT_TIMEOUT_MS)
+    return () => window.clearTimeout(timer)
+  }, [connecting, disconnect, wallet, onTimeout])
+
+  return null
+}
+
 type WalletLayoutProps = {
   env: Exclude<AppEnv, 'checking'>
   onWalletError: (error: WalletError, adapter?: Adapter) => void
+  onConnectTimeout: (message: string) => void
 }
 
 /**
@@ -85,7 +114,7 @@ type WalletLayoutProps = {
  * Because this layout wraps all routes, moving between pages no longer
  * tears down the wallet connection.
  */
-function WalletLayout({ env, onWalletError }: WalletLayoutProps) {
+function WalletLayout({ env, onWalletError, onConnectTimeout }: WalletLayoutProps) {
   const endpoint = useMemo(() => SOLANA_RPC_URL, [])
 
   // Explicit adapters make uninstalled wallets show under "More options"
@@ -118,6 +147,7 @@ function WalletLayout({ env, onWalletError }: WalletLayoutProps) {
             is needed in both environments. */}
         <WalletModalProvider>
           {env === 'miniapp' && <AutoSelectFarcasterWallet />}
+          <ConnectWatchdog onTimeout={onConnectTimeout} />
           <Outlet />
         </WalletModalProvider>
       </WalletProvider>
@@ -131,6 +161,24 @@ function WalletLayout({ env, onWalletError }: WalletLayoutProps) {
  * on screen, which also matters inside Farcaster where there is no
  * console to check on a phone.
  */
+/**
+ * Turns raw wallet errors into something a player can act on. The raw
+ * error is still logged to the console for debugging.
+ */
+function friendlyWalletMessage(error: WalletError, adapter?: Adapter): string {
+  const detail = error.message || (error.error as Error | undefined)?.message || error.name
+  if (adapter?.name === FARCASTER_WALLET_NAME && /no address/i.test(detail)) {
+    return "Your Farcaster wallet doesn't have a Solana address yet. Open the Wallet tab in Farcaster, set up Solana, then tap Connect again."
+  }
+  if (error.name === 'WalletNotSelectedError') {
+    return 'No wallet was selected. Tap Connect and choose a wallet.'
+  }
+  if (error.name === 'WalletNotReadyError') {
+    return `${adapter?.name ?? 'That wallet'} isn't installed in this browser.`
+  }
+  return adapter?.name ? `${adapter.name}: ${detail}` : detail
+}
+
 function WalletErrorBanner({ message, onClose }: { message: string; onClose: () => void }) {
   return (
     <div
@@ -186,17 +234,29 @@ function App() {
 
   const handleWalletError = useCallback((error: WalletError, adapter?: Adapter) => {
     console.error('Wallet error', adapter?.name, error)
-    const detail = error.message || (error.error as Error | undefined)?.message || error.name
-    setWalletError(adapter?.name ? `${adapter.name}: ${detail}` : detail)
+    setWalletError(friendlyWalletMessage(error, adapter))
+  }, [])
+
+  const handleConnectTimeout = useCallback((message: string) => {
+    setWalletError(message)
   }, [])
 
   return (
     <div className="relative min-h-screen">
       <AnimatedBackground />
       {env !== 'checking' && (
+        <AppEnvContext.Provider value={env}>
         <div className="relative z-10">
           <Routes>
-            <Route element={<WalletLayout env={env} onWalletError={handleWalletError} />}>
+            <Route
+              element={
+                <WalletLayout
+                  env={env}
+                  onWalletError={handleWalletError}
+                  onConnectTimeout={handleConnectTimeout}
+                />
+              }
+            >
               <Route path="/" element={<Lobby />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
@@ -208,6 +268,7 @@ function App() {
             </Route>
           </Routes>
         </div>
+        </AppEnvContext.Provider>
       )}
       {walletError && (
         <WalletErrorBanner message={walletError} onClose={() => setWalletError(null)} />
