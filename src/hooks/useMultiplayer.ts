@@ -273,6 +273,9 @@ export function useMultiplayer() {
     sendWhenReady({ type: 'join_room', roomCode: roomCode.toUpperCase(), playerName, walletAddress });
   }, []);
   const setWallet = useCallback((walletAddress: string, walletSignature?: string) => {
+    // Clear the previous attempt's error first, so an old "Could not
+    // verify" message doesn't stay on screen after a retry succeeds.
+    setState(prev => ({ ...prev, error: null }));
     wsRef.current?.send(JSON.stringify({ type: 'set_wallet', walletAddress, walletSignature }));
   }, []);
   const submitEntryFee = useCallback((txSignature: string, bundleId: string, currency: 'OREN' | 'SOL') => {

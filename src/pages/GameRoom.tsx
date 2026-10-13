@@ -20,6 +20,8 @@ import { bundleOrenPrice, bundleSolPrice } from '../utils/cardBundles';
 import { getLetterForNumber } from '../utils/gameLogic';
 import NoxLoader from '../components/NoxLoader';
 import { useAppEnv, FARCASTER_WALLET_NAME } from '../appEnv';
+import { sdk } from '@farcaster/miniapp-sdk';
+import { normaliseSignature, describeSignature, bytesToBase64 } from '../utils/walletSignature';
 
 function GameRoom() {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -149,21 +151,37 @@ function GameRoom() {
 
   async function verifyWallet() {
     if (!publicKey || !multi.walletChallenge) return;
-    if (!signMessage) {
-      setWalletProofError(
-        isFarcasterMiniApp
-          ? 'Your Farcaster wallet cannot sign messages, so it cannot be verified.'
-          : 'This wallet cannot sign messages, so it cannot be verified. Try Phantom or Solflare.'
-      );
+    if (!isFarcasterMiniApp && !signMessage) {
+      setWalletProofError('This wallet cannot sign messages, so it cannot be verified. Try Phantom or Solflare.');
       return;
     }
     setVerifyingWallet(true);
     setWalletProofError(null);
     try {
-      const sig = await signMessage(new TextEncoder().encode(multi.walletChallenge));
-      let bin = '';
-      sig.forEach(b => { bin += String.fromCharCode(b); });
-      multi.setWallet(publicKey.toBase58(), btoa(bin));
+      const message = new TextEncoder().encode(multi.walletChallenge);
+      let sig: Uint8Array;
+      if (isFarcasterMiniApp) {
+        // Ask Farcaster directly and decode its signature ourselves. The
+        // Farcaster wallet package assumes a base64 signature; when the
+        // real format differs, the bytes come out wrong and the server
+        // rejects every attempt, which is what kept players stuck here.
+        const provider = await sdk.wallet.getSolanaProvider();
+        if (!provider) {
+          setWalletProofError('Farcaster did not provide a Solana wallet, so this wallet cannot be verified.');
+          return;
+        }
+        const { signature } = await provider.signMessage(multi.walletChallenge);
+        const decoded = normaliseSignature(signature, message);
+        if (!decoded) {
+          console.error('Unreadable Farcaster signature:', describeSignature(signature));
+          setWalletProofError('Farcaster returned a signature NoxBingo could not read. Please try again.');
+          return;
+        }
+        sig = decoded;
+      } else {
+        sig = await signMessage!(message);
+      }
+      multi.setWallet(publicKey.toBase58(), bytesToBase64(sig));
     } catch (err) {
       console.error('Wallet verification failed:', err);
       setWalletProofError('Wallet verification was cancelled. Tap "Verify wallet" to try again.');
