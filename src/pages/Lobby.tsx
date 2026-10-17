@@ -6,7 +6,8 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { useAudio } from '../hooks/useAudio'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { useSolanaContract } from '../hooks/useSolanaContract'
+import { useWalletBalances, formatBalance } from '../hooks/useWalletBalances'
+import { loadSession } from '../utils/gameSession'
 import { usePageMeta } from '../hooks/usePageMeta'
 import NoxLoader from '../components/NoxLoader'
 
@@ -26,18 +27,18 @@ function Lobby() {
   const { user, loading, signOut } = useAuth()
   const { publicKey: solanaPublicKey, disconnect: disconnectSolana } = useWallet()
   const { setVisible: setSolanaModalVisible } = useWalletModal()
-  const { balance: orenBalance, getBalance: getOrenBalance } = useSolanaContract()
+  const { oren: orenBalance, sol: solBalance } = useWalletBalances()
+  // A game this browser still holds a seat in (reload, closed tab, or a
+  // phone that dropped the connection). Finished games aren't offered.
+  const [savedGame] = useState(() => {
+    const session = loadSession()
+    return session && !session.finished ? session : null
+  })
   const [username, setUsername] = useState('')
   const [balance] = useState(() => {
     const saved = localStorage.getItem('noxbingo-balance')
     return saved ? parseInt(saved) : 1000
   })
-
-  useEffect(() => {
-    if (solanaPublicKey) {
-      getOrenBalance()
-    }
-  }, [solanaPublicKey])
 
   useEffect(() => {
     if (user) {
@@ -83,6 +84,15 @@ function Lobby() {
     navigate(
       '/room/new?mode=create&name=' + encodeURIComponent(playerName) + '&prize=' + prizeTier + '&maxPlayers=' + maxPlayers
     )
+  }
+
+  function handleRejoin() {
+    if (!savedGame) return
+    play('gameStart')
+    const params = new URLSearchParams({ mode: savedGame.mode || 'join' })
+    if (savedGame.playerName) params.set('name', savedGame.playerName)
+    if (savedGame.maxPlayers) params.set('maxPlayers', String(savedGame.maxPlayers))
+    navigate('/room/' + savedGame.roomCode + '?' + params.toString())
   }
 
   function handleJoinRoom() {
@@ -501,6 +511,29 @@ function Lobby() {
           Enter the Void
         </motion.p>
 
+        {savedGame && (
+          <motion.button
+            onClick={handleRejoin}
+            style={{
+              padding: '14px 44px',
+              fontSize: '15px',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              backgroundColor: 'rgba(0,229,255,0.1)',
+              border: '1px solid rgba(0,229,255,0.5)',
+              borderRadius: '12px',
+              color: '#00E5FF',
+              cursor: 'pointer',
+              marginBottom: '24px',
+            }}
+            whileHover={{ scale: 1.02, boxShadow: '0 0 24px rgba(0,229,255,0.2)' }}
+            whileTap={{ scale: 0.98 }}
+          >
+            Rejoin your game ({savedGame.roomCode})
+          </motion.button>
+        )}
+
         {user ? (
           <>
             <div
@@ -548,7 +581,7 @@ function Lobby() {
                       to wallet address. Showing live OREN balance is
                       the honest thing to show today, not a fabricated
                       stat. */}
-                  {orenBalance.toLocaleString()} OREN in wallet
+                  {formatBalance(orenBalance, 2)} OREN · {formatBalance(solBalance, 3)} SOL in wallet
                 </div>
               )}
             </div>

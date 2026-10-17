@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import type { BingoCard } from '../types/game';
 interface VictoryOverlayProps {
   winningCardIndex: number | null;
-  bonusCardIndex: number | null;
+  // Every card whose NOX number was drawn; each one earns a bonus.
+  bonusCardIndexes: number[];
   roomCode: string;
   cards: BingoCard[];
   drawnBalls: number[];
@@ -33,14 +34,15 @@ interface VictoryOverlayProps {
   jackpotSignature?: string | null;
   jackpotError?: string | null;
 }
-function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount, jackpotWon, jackpotAmount, jackpotSignature, jackpotError }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndexes, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount, jackpotWon, jackpotAmount, jackpotSignature, jackpotError }: VictoryOverlayProps) {
   const drawnNumbers = new Set(drawnBalls);
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
   const [viewingCards, setViewingCards] = useState(false);
   const [currentViewCard, setCurrentViewCard] = useState(0);
   const hasBingo = winningCardIndex !== null;
-  const hasBonus = bonusCardIndex !== null;
+  const hasBonus = bonusCardIndexes.length > 0;
+  const bonusTotal = (noxBonusAmount ?? 25) * bonusCardIndexes.length;
   const isDoubleWin = hasBingo && hasBonus;
   const isNoWinner = !hasBingo && !hasBonus;
   // Only the actual multiplayer bingo winner gets a real on-chain
@@ -87,13 +89,14 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
   if (viewingCards) {
     const card = cards[currentViewCard];
     const isWinner = currentViewCard === winningCardIndex;
+    const isBonusCard = bonusCardIndexes.includes(currentViewCard);
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', gap: '16px', background: 'radial-gradient(ellipse at center, rgba(11,11,69,0.92), rgba(11,11,69,0.98))' }}>
         <p style={{ color: '#FFD700', fontSize: '18px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          Card {currentViewCard + 1} of {cards.length}{isWinner ? ' ' + trophyEmoji : ''}{currentViewCard === bonusCardIndex && !hasBingo ? ' ' + starEmoji : ''}
+          Card {currentViewCard + 1} of {cards.length}{isWinner ? ' ' + trophyEmoji : ''}{isBonusCard ? ' ' + starEmoji : ''}
         </p>
-        <div style={{ background: 'linear-gradient(145deg, rgba(26,26,94,0.95), rgba(18,18,77,0.98))', padding: '20px', borderRadius: '12px', border: isWinner ? '2px solid rgba(255,215,0,0.6)' : '1px solid rgba(255,255,255,0.1)', boxShadow: isWinner ? '0 0 30px rgba(255,215,0,0.3)' : '0 4px 24px rgba(0,0,0,0.3)' }}>
+        <div style={{ background: 'linear-gradient(145deg, rgba(26,26,94,0.95), rgba(18,18,77,0.98))', padding: '20px', borderRadius: '12px', border: isWinner ? '2px solid rgba(255,215,0,0.6)' : isBonusCard ? '2px solid rgba(0,229,255,0.6)' : '1px solid rgba(255,255,255,0.1)', boxShadow: isWinner ? '0 0 30px rgba(255,215,0,0.3)' : isBonusCard ? '0 0 24px rgba(0,229,255,0.3)' : '0 4px 24px rgba(0,0,0,0.3)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px', marginBottom: '8px', textAlign: 'center' }}>
             {['B','I','N','G','O'].map(l => <div key={l} style={{ color: isWinner ? '#FFD700' : 'rgba(0,229,255,0.7)', fontWeight: 700, fontSize: '14px' }}>{l}</div>)}
           </div>
@@ -187,7 +190,7 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
            isNoWinner ? 'Better luck next time' :
            isDoubleWin ? 'Card ' + ((winningCardIndex ?? 0) + 1) + ' wins + Nox bonus!' :
            hasBingo ? (isMultiplayerWinner ? 'You won! Card ' + ((winningCardIndex ?? 0) + 1) : 'Card ' + ((winningCardIndex ?? 0) + 1) + ' takes the win') :
-           'Card ' + ((bonusCardIndex ?? 0) + 1) + ' hit the Nox bonus!'}
+           (bonusCardIndexes.length === 1 ? 'Card ' : 'Cards ') + bonusCardIndexes.map(i => i + 1).join(', ') + ' hit the Nox bonus!'}
         </motion.p>
         {(hasBingo || hasBonus) && !isMultiplayerLoser && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.0 }} style={{ marginBottom: '24px' }}>
@@ -198,7 +201,7 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
             )}
             {hasBonus && (
               <motion.p animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 2, repeat: Infinity }} style={{ fontSize: '18px', fontWeight: 600, color: '#00E5FF', marginTop: '4px' }}>
-                +{noxBonusAmount ?? 25} NOX Bonus
+                NOX bonus ×{bonusCardIndexes.length}: +{bonusTotal.toLocaleString()} NOX
               </motion.p>
             )}
           </motion.div>
@@ -280,7 +283,7 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
           </motion.div>
         )}
 
-        <motion.button onClick={() => openCardViewer(hasBingo ? winningCardIndex! : 0)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}
+        <motion.button onClick={() => openCardViewer(hasBingo ? winningCardIndex! : hasBonus ? bonusCardIndexes[0] : 0)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}
           style={{ padding: '10px 24px', border: '1px solid rgba(255,215,0,0.4)', borderRadius: '8px', color: '#FFD700', background: 'rgba(255,215,0,0.08)', cursor: 'pointer', fontWeight: 600, fontSize: '14px', letterSpacing: '0.05em', marginBottom: '24px' }}
           whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
           {eyeEmoji} {hasBingo ? 'View Winning Card' : 'View All Cards'}
