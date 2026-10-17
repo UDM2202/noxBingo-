@@ -21,7 +21,7 @@ import { getLetterForNumber } from '../utils/gameLogic';
 import NoxLoader from '../components/NoxLoader';
 import { useAppEnv, FARCASTER_WALLET_NAME } from '../appEnv';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { normaliseSignature, describeSignature, bytesToBase64 } from '../utils/walletSignature';
+import { normaliseSignature, describeSignature, bytesToBase64, checkSignature } from '../utils/walletSignature';
 
 function GameRoom() {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -147,6 +147,9 @@ function GameRoom() {
   // name someone else's wallet and claim their on-chain payment).
   const [walletProofError, setWalletProofError] = useState<string | null>(null);
   const [verifyingWallet, setVerifyingWallet] = useState(false);
+  // Temporary: result of the on-device signature check inside Farcaster,
+  // shown under the Verify button while the signing issue is diagnosed.
+  const [signatureCheck, setSignatureCheck] = useState<string | null>(null);
   const syncedWalletKey = useRef<string | null>(null);
 
   async function verifyWallet() {
@@ -171,7 +174,13 @@ function GameRoom() {
           return;
         }
         const { signature } = await provider.signMessage(multi.walletChallenge);
-        const decoded = normaliseSignature(signature, message);
+        // Check the signature on the device first. If one reading of it
+        // verifies against the exact challenge, send that one. The result
+        // is also shown on screen to diagnose Farcaster signing problems.
+        const check = await checkSignature(signature, multi.walletChallenge, publicKey.toBytes());
+        setSignatureCheck(check.summary);
+        console.log('Farcaster signature check:', check.summary);
+        const decoded = check.plainSignature ?? normaliseSignature(signature, message);
         if (!decoded) {
           console.error('Unreadable Farcaster signature:', describeSignature(signature));
           setWalletProofError('Farcaster returned a signature NoxBingo could not read. Please try again.');
@@ -184,7 +193,15 @@ function GameRoom() {
       multi.setWallet(publicKey.toBase58(), bytesToBase64(sig));
     } catch (err) {
       console.error('Wallet verification failed:', err);
-      setWalletProofError('Wallet verification was cancelled. Tap "Verify wallet" to try again.');
+      // Show the wallet's own reason (shortened). Inside Farcaster there is
+      // no console to check on a phone, so this is the only way to see why
+      // a signature request failed.
+      const reason = (err instanceof Error ? err.message : String(err)).trim().slice(0, 160);
+      setWalletProofError(
+        reason && !/reject|cancel|denied|declined/i.test(reason)
+          ? `Wallet verification failed: ${reason}`
+          : 'Wallet verification was cancelled. Tap "Verify wallet" to try again.'
+      );
     } finally {
       setVerifyingWallet(false);
     }
@@ -548,6 +565,11 @@ function GameRoom() {
                 </motion.button>
                 {walletProofError && (
                   <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>{walletProofError}</p>
+                )}
+                {isFarcasterMiniApp && signatureCheck && (
+                  <p style={{ color: '#5C5C9E', fontSize: '11px', textAlign: 'center', maxWidth: '300px', wordBreak: 'break-word' }}>
+                    Signature check: {signatureCheck}
+                  </p>
                 )}
               </div>
             )}

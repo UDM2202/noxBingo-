@@ -99,6 +99,111 @@ export function describeSignature(raw: string | Uint8Array): string {
   return `string(${raw.length}) starting "${raw.slice(0, 6)}"`;
 }
 
+// ── On-device signature check ─────────────────────────────────────
+// Verifies the wallet's signature locally against the player's public
+// key, to find out exactly how the wallet encoded the signature and what
+// bytes it actually signed. Uses the browser's built-in Ed25519 support
+// (WebCrypto), so no extra packages are needed.
+
+const textEncoder = new TextEncoder();
+
+function concatBytes(...parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let offset = 0;
+  for (const p of parts) {
+    out.set(p, offset);
+    offset += p.length;
+  }
+  return out;
+}
+
+function u16le(n: number): Uint8Array {
+  return new Uint8Array([n & 0xff, (n >> 8) & 0xff]);
+}
+
+// "\xffsolana offchain": the prefix some wallets add before signing text.
+const OFFCHAIN_DOMAIN = concatBytes(new Uint8Array([0xff]), textEncoder.encode('solana offchain'));
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Every form of the challenge a wallet might plausibly have signed. */
+function messageVariants(challenge: string, publicKey: Uint8Array): [string, Uint8Array][] {
+  const body = textEncoder.encode(challenge);
+  const variants: [string, Uint8Array][] = [['plain', body]];
+  for (const format of [0, 1, 2]) {
+    // Older off-chain format: domain, version, format, length, message.
+    variants.push([`offchain-short-f${format}`, concatBytes(
+      OFFCHAIN_DOMAIN, new Uint8Array([0, format]), u16le(body.length), body,
+    )]);
+    // Newer off-chain format adds an application domain and the signer.
+    variants.push([`offchain-full-f${format}`, concatBytes(
+      OFFCHAIN_DOMAIN, new Uint8Array([0]), new Uint8Array(32), new Uint8Array([format, 1]),
+      publicKey, u16le(body.length), body,
+    )]);
+  }
+  variants.push(['hex-text', textEncoder.encode(bytesToHex(body))]);
+  variants.push(['base64-text', textEncoder.encode(bytesToBase64(body))]);
+  return variants;
+}
+
+export type SignatureCheck = {
+  /** Signature bytes that verify against the plain challenge, if any. */
+  plainSignature: Uint8Array | null;
+  /** Short human-readable result, shown on screen while debugging. */
+  summary: string;
+};
+
+export async function checkSignature(
+  raw: string | Uint8Array,
+  challenge: string,
+  publicKey: Uint8Array,
+): Promise<SignatureCheck> {
+  const rawInfo = describeSignature(raw);
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) return { plainSignature: null, summary: `no local check (no WebCrypto) · ${rawInfo}` };
+
+  let key: CryptoKey;
+  try {
+    key = await subtle.importKey('raw', publicKey as BufferSource, { name: 'Ed25519' }, false, ['verify']);
+  } catch {
+    return { plainSignature: null, summary: `no local check (Ed25519 unsupported) · ${rawInfo}` };
+  }
+
+  const message = textEncoder.encode(challenge);
+  const decodings: [string, Uint8Array | null][] = raw instanceof Uint8Array
+    ? [['bytes', pickSignature(raw, message)]]
+    : [
+        ['hex', pickSignature(decodeHex(raw.trim()), message)],
+        ['base58', pickSignature(decodeBase58(raw.trim()), message)],
+        ['base64', pickSignature(decodeBase64(raw.trim()), message)],
+      ];
+
+  const matches: string[] = [];
+  let plainSignature: Uint8Array | null = null;
+  for (const [encoding, sig] of decodings) {
+    if (!sig) continue;
+    for (const [variant, bytes] of messageVariants(challenge, publicKey)) {
+      try {
+        if (await subtle.verify({ name: 'Ed25519' }, key, sig as BufferSource, bytes as BufferSource)) {
+          matches.push(`${encoding}+${variant}`);
+          if (variant === 'plain' && !plainSignature) plainSignature = sig;
+        }
+      } catch {
+        // A malformed candidate just doesn't match.
+      }
+    }
+  }
+
+  return {
+    plainSignature,
+    summary: matches.length
+      ? `match: ${matches.join(', ')} · ${rawInfo}`
+      : `no match for this wallet's key · ${rawInfo}`,
+  };
+}
+
 export function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   bytes.forEach(b => { binary += String.fromCharCode(b); });
