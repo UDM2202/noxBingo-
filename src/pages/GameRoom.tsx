@@ -148,9 +148,6 @@ function GameRoom() {
   // name someone else's wallet and claim their on-chain payment).
   const [walletProofError, setWalletProofError] = useState<string | null>(null);
   const [verifyingWallet, setVerifyingWallet] = useState(false);
-  // Temporary: result of the on-device signature check inside Farcaster,
-  // shown under the Verify button while the signing issue is diagnosed.
-  const [signatureCheck, setSignatureCheck] = useState<string | null>(null);
   const [verifiedSigningAddress, setVerifiedSigningAddress] = useState<string | null>(null);
   const syncedWalletKey = useRef<string | null>(null);
 
@@ -191,7 +188,7 @@ function GameRoom() {
 
         // Check the signature on the device against both addresses. If one
         // reading of it verifies against the exact challenge, send that.
-        // The result is also shown on screen to diagnose signing problems.
+        // The result is logged to the console for troubleshooting.
         const keys: CandidateKey[] = [{ label: 'app', bytes: publicKey.toBytes() }];
         if (hostAddress && hostAddress !== publicKey.toBase58()) {
           try {
@@ -201,7 +198,6 @@ function GameRoom() {
           }
         }
         const check = await checkSignature(signature, multi.walletChallenge, keys);
-        setSignatureCheck(check.summary);
         console.log('Farcaster signature check:', check.summary);
 
         const decoded = check.plainSignature ?? normaliseSignature(signature, message);
@@ -600,13 +596,7 @@ function GameRoom() {
                 </motion.button>
                 {walletProofError && (
                   <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>{walletProofError}</p>
-                )}
-                {isFarcasterMiniApp && signatureCheck && (
-                  <p style={{ color: '#5C5C9E', fontSize: '11px', textAlign: 'center', maxWidth: '300px', wordBreak: 'break-word' }}>
-                    Signature check: {signatureCheck}
-                  </p>
-                )}
-              </div>
+                )}              </div>
             )}
 
             {publicKey && walletVerified && !(multi.players.find(p => p.id === (myPlayerId.current || multi.playerId))?.paidEntryFee) && (
