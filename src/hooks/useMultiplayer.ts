@@ -279,6 +279,9 @@ export function useMultiplayer() {
     wsRef.current?.send(JSON.stringify({ type: 'set_wallet', walletAddress, walletSignature }));
   }, []);
   const submitEntryFee = useCallback((txSignature: string, bundleId: string, currency: 'OREN' | 'SOL') => {
+    // Clear the last result first, so a repeat of the same error still
+    // shows up as a fresh reply instead of looking like nothing happened.
+    setState(prev => ({ ...prev, entryFeeError: null }));
     wsRef.current?.send(JSON.stringify({ type: 'submit_entry_fee', txSignature, bundleId, currency }));
   }, []);
   const removePlayer = useCallback((playerId: string) => {
