@@ -23,6 +23,7 @@ import { useAppEnv, FARCASTER_WALLET_NAME } from '../appEnv';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { normaliseSignature, describeSignature, bytesToBase64, checkSignature, type CandidateKey } from '../utils/walletSignature';
 import { PublicKey } from '@solana/web3.js';
+import { loadPendingPayment, savePendingPayment, clearPendingPayment, type PendingPayment } from '../utils/pendingPayment';
 
 function GameRoom() {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -425,25 +426,90 @@ function GameRoom() {
     return () => { cancelled = true; };
   }, [selectedCurrency, selectedBundleId]);
 
+  // Re-sends an already-made payment for checking. Never charges again.
+  function handleResubmitPendingPayment() {
+    if (!pendingPayment) return;
+    setFeeError(null);
+    multi.submitEntryFee(pendingPayment.signature, pendingPayment.bundleId, pendingPayment.currency);
+  }
+
+  // Lets the player abandon a saved payment and pay fresh. Kept behind a
+  // confirm because it means paying again.
+  function handleDiscardPendingPayment() {
+    if (!pendingPayment) return;
+    const ok = window.confirm(
+      `You already paid ${pendingPayment.amount.toFixed(pendingPayment.currency === 'SOL' ? 5 : 2)} ${pendingPayment.currency}. ` +
+      'Paying again will charge you again. Only do this if support has told you to. Continue?'
+    );
+    if (!ok) return;
+    clearPendingPayment(pendingPayment.wallet);
+    setPendingPayment(null);
+  }
+
+  // The saved, not-yet-confirmed payment for the connected wallet, if any.
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  useEffect(() => {
+    setPendingPayment(publicKey ? loadPendingPayment(publicKey.toBase58()) : null);
+  }, [publicKey]);
+
+  // Once the server confirms the entry, the saved payment is done with.
+  useEffect(() => {
+    if (pendingPayment && meInRoom?.paidEntryFee) {
+      clearPendingPayment(pendingPayment.wallet);
+      setPendingPayment(null);
+    }
+  }, [pendingPayment, meInRoom?.paidEntryFee]);
+
+  // The server only accepts a transaction once. If it says this one was
+  // already used, it can't be retried here; support has to sort it out.
+  useEffect(() => {
+    if (pendingPayment && multi.entryFeeError && /already been used/i.test(multi.entryFeeError)) {
+      clearPendingPayment(pendingPayment.wallet);
+      setPendingPayment(null);
+      setFeeError(
+        `That payment was already used for an entry. If you weren't placed in a game, contact support with this transaction: ${pendingPayment.signature}`
+      );
+    }
+  }, [pendingPayment, multi.entryFeeError]);
+
   async function handlePayEntryFee() {
+    // A payment that already went through must be re-checked, not repeated.
+    if (pendingPayment) {
+      handleResubmitPendingPayment();
+      return;
+    }
     const bundle = multi.bundles.find(b => b.id === selectedBundleId);
-    if (!bundle) return;
+    if (!bundle || !publicKey) return;
     setFeeError(null);
     setPayingFee(true);
     try {
+      let signature: string;
+      let amount: number;
       if (selectedCurrency === 'OREN') {
-        const orenAmount = bundleOrenPrice(bundle, multi.orenToGbpRate);
-        const signature = await payEntryFee(orenAmount);
-        multi.submitEntryFee(signature, bundle.id, 'OREN');
+        amount = bundleOrenPrice(bundle, multi.orenToGbpRate);
+        signature = await payEntryFee(amount);
       } else {
         if (!solUsdPrice) {
           setFeeError('Still fetching a live SOL price — try again in a moment.');
           return;
         }
-        const solAmount = bundleSolPrice(bundle, multi.gbpToUsdtRate, solUsdPrice);
-        const signature = await payEntryFeeSol(solAmount);
-        multi.submitEntryFee(signature, bundle.id, 'SOL');
+        amount = bundleSolPrice(bundle, multi.gbpToUsdtRate, solUsdPrice);
+        signature = await payEntryFeeSol(amount);
       }
+      // Save the payment BEFORE asking the server to check it, so a failed
+      // check can be retried with this same transaction.
+      const pending: PendingPayment = {
+        wallet: publicKey.toBase58(),
+        signature,
+        bundleId: bundle.id,
+        bundleLabel: bundle.label,
+        currency: selectedCurrency,
+        amount,
+        createdAt: Date.now(),
+      };
+      savePendingPayment(pending);
+      setPendingPayment(pending);
+      multi.submitEntryFee(signature, bundle.id, selectedCurrency);
     } catch (err) {
       // Log the wallet/RPC's own error text for diagnosis, but keep it
       // off the screen — players only see the friendly message.
@@ -601,6 +667,49 @@ function GameRoom() {
 
             {publicKey && walletVerified && !(multi.players.find(p => p.id === (myPlayerId.current || multi.playerId))?.paidEntryFee) && (
               <div className="flex flex-col items-center gap-3">
+                {pendingPayment ? (
+                  <>
+                    <p style={{ color: '#5C5C9E', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                      Payment received
+                    </p>
+                    <p style={{ color: '#8B8BD4', fontSize: '13px', textAlign: 'center', maxWidth: '290px' }}>
+                      You already paid{' '}
+                      <span style={{ color: '#FFD700', fontWeight: 700 }}>
+                        {pendingPayment.amount.toFixed(pendingPayment.currency === 'SOL' ? 5 : 2)} {pendingPayment.currency}
+                      </span>{' '}
+                      for {pendingPayment.bundleLabel}. Tap below to confirm it. You won't be charged again.
+                    </p>
+                    <motion.button
+                      onClick={handleResubmitPendingPayment}
+                      style={{
+                        padding: '12px 32px',
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        letterSpacing: '0.05em',
+                        backgroundColor: 'rgba(0,229,255,0.1)',
+                        border: '1px solid rgba(0,229,255,0.4)',
+                        borderRadius: '10px',
+                        color: '#00E5FF',
+                        cursor: 'pointer',
+                      }}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                    >
+                      Confirm my payment
+                    </motion.button>
+                    {(feeError || multi.entryFeeError) && (
+                      <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px', wordBreak: 'break-word' }}>
+                        {feeError || multi.entryFeeError}
+                      </p>
+                    )}
+                    <button
+                      onClick={handleDiscardPendingPayment}
+                      style={{ background: 'none', border: 'none', color: '#5C5C9E', fontSize: '11px', textDecoration: 'underline', cursor: 'pointer' }}
+                    >
+                      Make a new payment instead
+                    </button>
+                  </>
+                ) : (<>
                 <p style={{ color: '#5C5C9E', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   Choose your cards
                 </p>
@@ -696,13 +805,14 @@ function GameRoom() {
                   {payingFee ? 'Sending…' : `Pay with ${selectedCurrency}`}
                 </motion.button>
                 {(feeError || multi.entryFeeError) && (
-                  <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>
+                  <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px', wordBreak: 'break-word' }}>
                     {feeError || multi.entryFeeError}
                   </p>
                 )}
                 <p style={{ color: '#8B8BD4', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>
                   You'll be removed from the room if you don't pay within 90 seconds of connecting.
                 </p>
+                </>)}
               </div>
             )}
 
