@@ -426,10 +426,26 @@ function GameRoom() {
     return () => { cancelled = true; };
   }, [selectedCurrency, selectedBundleId]);
 
+  // True from sending a payment for checking until the server answers.
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  useEffect(() => {
+    if (checkingPayment && (multi.entryFeeError || meInRoom?.paidEntryFee)) setCheckingPayment(false);
+  }, [checkingPayment, multi.entryFeeError, meInRoom?.paidEntryFee]);
+  useEffect(() => {
+    // Never leave the button stuck if the server doesn't answer at all.
+    if (!checkingPayment) return;
+    const timer = window.setTimeout(() => {
+      setCheckingPayment(false);
+      setFeeError('No answer from the server yet. Your payment is saved, so tap Confirm my payment to try again.');
+    }, 30000);
+    return () => window.clearTimeout(timer);
+  }, [checkingPayment]);
+
   // Re-sends an already-made payment for checking. Never charges again.
   function handleResubmitPendingPayment() {
-    if (!pendingPayment) return;
+    if (!pendingPayment || checkingPayment) return;
     setFeeError(null);
+    setCheckingPayment(true);
     multi.submitEntryFee(pendingPayment.signature, pendingPayment.bundleId, pendingPayment.currency);
   }
 
@@ -509,6 +525,7 @@ function GameRoom() {
       };
       savePendingPayment(pending);
       setPendingPayment(pending);
+      setCheckingPayment(true);
       multi.submitEntryFee(signature, bundle.id, selectedCurrency);
     } catch (err) {
       // Log the wallet/RPC's own error text for diagnosis, but keep it
@@ -681,7 +698,9 @@ function GameRoom() {
                     </p>
                     <motion.button
                       onClick={handleResubmitPendingPayment}
+                      disabled={checkingPayment}
                       style={{
+                        opacity: checkingPayment ? 0.6 : 1,
                         padding: '12px 32px',
                         fontSize: '15px',
                         fontWeight: 700,
@@ -690,12 +709,12 @@ function GameRoom() {
                         border: '1px solid rgba(0,229,255,0.4)',
                         borderRadius: '10px',
                         color: '#00E5FF',
-                        cursor: 'pointer',
+                        cursor: checkingPayment ? 'wait' : 'pointer',
                       }}
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
+                      whileHover={{ scale: checkingPayment ? 1 : 1.03 }}
+                      whileTap={{ scale: checkingPayment ? 1 : 0.97 }}
                     >
-                      Confirm my payment
+                      {checkingPayment ? 'Checking your payment…' : 'Confirm my payment'}
                     </motion.button>
                     {(feeError || multi.entryFeeError) && (
                       <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px', wordBreak: 'break-word' }}>
