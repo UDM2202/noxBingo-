@@ -170,6 +170,9 @@ function friendlyWalletMessage(error: WalletError, adapter?: Adapter): string {
   if (adapter?.name === FARCASTER_WALLET_NAME && /no address/i.test(detail)) {
     return "Your Farcaster wallet doesn't have a Solana address yet. Open the Wallet tab in Farcaster, set up Solana, then tap Connect again."
   }
+  if (/user rejected|rejected the request|user denied|cancel/i.test(detail)) {
+    return `You cancelled the request in ${adapter?.name ?? 'your wallet'}. Nothing was sent.`
+  }
   if (error.name === 'WalletNotSelectedError') {
     return 'No wallet was selected. Tap Connect and choose a wallet.'
   }
@@ -187,7 +190,7 @@ function WalletErrorBanner({ message, onClose }: { message: string; onClose: () 
     >
       <div className="flex items-start gap-3">
         <p className="flex-1 break-words">
-          <span className="font-semibold">Wallet couldn't connect.</span> {message}
+          <span className="font-semibold">Wallet:</span> {message}
         </p>
         <button
           type="button"
