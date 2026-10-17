@@ -21,7 +21,8 @@ import { getLetterForNumber } from '../utils/gameLogic';
 import NoxLoader from '../components/NoxLoader';
 import { useAppEnv, FARCASTER_WALLET_NAME } from '../appEnv';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { normaliseSignature, describeSignature, bytesToBase64, checkSignature } from '../utils/walletSignature';
+import { normaliseSignature, describeSignature, bytesToBase64, checkSignature, type CandidateKey } from '../utils/walletSignature';
+import { PublicKey } from '@solana/web3.js';
 
 function GameRoom() {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -150,6 +151,7 @@ function GameRoom() {
   // Temporary: result of the on-device signature check inside Farcaster,
   // shown under the Verify button while the signing issue is diagnosed.
   const [signatureCheck, setSignatureCheck] = useState<string | null>(null);
+  const [verifiedSigningAddress, setVerifiedSigningAddress] = useState<string | null>(null);
   const syncedWalletKey = useRef<string | null>(null);
 
   async function verifyWallet() {
@@ -163,6 +165,7 @@ function GameRoom() {
     try {
       const message = new TextEncoder().encode(multi.walletChallenge);
       let sig: Uint8Array;
+      let signingAddress = publicKey.toBase58();
       if (isFarcasterMiniApp) {
         // Ask Farcaster directly and decode its signature ourselves. The
         // Farcaster wallet package assumes a base64 signature; when the
@@ -173,13 +176,34 @@ function GameRoom() {
           setWalletProofError('Farcaster did not provide a Solana wallet, so this wallet cannot be verified.');
           return;
         }
+        // Ask Farcaster which address it signs with right now. It can
+        // differ from the address the app connected to (for example when
+        // the account has both an embedded wallet and a linked wallet).
+        let hostAddress: string | null = null;
+        try {
+          const res = await provider.request({ method: 'connect' });
+          hostAddress = res?.publicKey ?? null;
+        } catch (err) {
+          console.warn('Farcaster connect lookup failed:', err);
+        }
+
         const { signature } = await provider.signMessage(multi.walletChallenge);
-        // Check the signature on the device first. If one reading of it
-        // verifies against the exact challenge, send that one. The result
-        // is also shown on screen to diagnose Farcaster signing problems.
-        const check = await checkSignature(signature, multi.walletChallenge, publicKey.toBytes());
+
+        // Check the signature on the device against both addresses. If one
+        // reading of it verifies against the exact challenge, send that.
+        // The result is also shown on screen to diagnose signing problems.
+        const keys: CandidateKey[] = [{ label: 'app', bytes: publicKey.toBytes() }];
+        if (hostAddress && hostAddress !== publicKey.toBase58()) {
+          try {
+            keys.push({ label: 'farcaster', bytes: new PublicKey(hostAddress).toBytes() });
+          } catch {
+            console.warn('Farcaster returned an invalid address:', hostAddress);
+          }
+        }
+        const check = await checkSignature(signature, multi.walletChallenge, keys);
         setSignatureCheck(check.summary);
         console.log('Farcaster signature check:', check.summary);
+
         const decoded = check.plainSignature ?? normaliseSignature(signature, message);
         if (!decoded) {
           console.error('Unreadable Farcaster signature:', describeSignature(signature));
@@ -187,10 +211,16 @@ function GameRoom() {
           return;
         }
         sig = decoded;
+        // The signature proves ownership of whichever address signed it, so
+        // verify that address with the server.
+        if (check.plainKeyLabel === 'farcaster' && hostAddress) {
+          signingAddress = hostAddress;
+        }
       } else {
         sig = await signMessage!(message);
       }
-      multi.setWallet(publicKey.toBase58(), bytesToBase64(sig));
+      setVerifiedSigningAddress(signingAddress);
+      multi.setWallet(signingAddress, bytesToBase64(sig));
     } catch (err) {
       console.error('Wallet verification failed:', err);
       // Show the wallet's own reason (shortened). Inside Farcaster there is
@@ -266,7 +296,12 @@ function GameRoom() {
     myPlayerId.current = multi.playerId;
   }
   const meInRoom = multi.players.find(p => p.id === (myPlayerId.current || multi.playerId));
-  const walletVerified = !!publicKey && meInRoom?.walletAddress === publicKey.toBase58();
+  // Verified when the server holds either the connected address or, inside
+  // Farcaster, the address Farcaster actually signed with.
+  const walletVerified = !!publicKey && !!meInRoom?.walletAddress && (
+    meInRoom.walletAddress === publicKey.toBase58() ||
+    meInRoom.walletAddress === verifiedSigningAddress
+  );
   const displayRoomCode = isMultiplayer ? multi.roomCode : soloState.roomCode || roomCode || '------';
 
   useEffect(() => {

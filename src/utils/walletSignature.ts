@@ -151,24 +151,62 @@ function messageVariants(challenge: string, publicKey: Uint8Array): [string, Uin
 export type SignatureCheck = {
   /** Signature bytes that verify against the plain challenge, if any. */
   plainSignature: Uint8Array | null;
+  /** Label of the key that produced plainSignature, if any. */
+  plainKeyLabel: string | null;
   /** Short human-readable result, shown on screen while debugging. */
   summary: string;
 };
 
+export type CandidateKey = { label: string; bytes: Uint8Array };
+
+/**
+ * Decodes text the way Node's Buffer.from(text, 'base64') does: skipping
+ * any character that isn't base64. A wallet that wrongly treats our
+ * plain-text challenge as base64 would end up signing these bytes.
+ */
+function lenientBase64(text: string): Uint8Array | null {
+  let cleaned = text.replace(/-/g, '+').replace(/_/g, '/').replace(/[^A-Za-z0-9+/]/g, '');
+  if (cleaned.length % 4 === 1) cleaned = cleaned.slice(0, -1);
+  return decodeBase64(cleaned);
+}
+
+export function shortAddress(bytes: Uint8Array): string {
+  const encoded = encodeBase58(bytes);
+  return `${encoded.slice(0, 4)}…${encoded.slice(-4)}`;
+}
+
+function encodeBase58(bytes: Uint8Array): string {
+  const digits: number[] = [];
+  for (const byte of bytes) {
+    let carry = byte;
+    for (let i = 0; i < digits.length; i++) {
+      carry += digits[i] << 8;
+      digits[i] = carry % 58;
+      carry = (carry / 58) | 0;
+    }
+    while (carry > 0) {
+      digits.push(carry % 58);
+      carry = (carry / 58) | 0;
+    }
+  }
+  let out = '';
+  for (const byte of bytes) {
+    if (byte !== 0) break;
+    out += '1';
+  }
+  for (let i = digits.length - 1; i >= 0; i--) out += BASE58_ALPHABET[digits[i]];
+  return out;
+}
+
 export async function checkSignature(
   raw: string | Uint8Array,
   challenge: string,
-  publicKey: Uint8Array,
+  keys: CandidateKey[],
 ): Promise<SignatureCheck> {
   const rawInfo = describeSignature(raw);
   const subtle = globalThis.crypto?.subtle;
-  if (!subtle) return { plainSignature: null, summary: `no local check (no WebCrypto) · ${rawInfo}` };
-
-  let key: CryptoKey;
-  try {
-    key = await subtle.importKey('raw', publicKey as BufferSource, { name: 'Ed25519' }, false, ['verify']);
-  } catch {
-    return { plainSignature: null, summary: `no local check (Ed25519 unsupported) · ${rawInfo}` };
+  if (!subtle) {
+    return { plainSignature: null, plainKeyLabel: null, summary: `no local check (no WebCrypto) · ${rawInfo}` };
   }
 
   const message = textEncoder.encode(challenge);
@@ -182,25 +220,49 @@ export async function checkSignature(
 
   const matches: string[] = [];
   let plainSignature: Uint8Array | null = null;
-  for (const [encoding, sig] of decodings) {
-    if (!sig) continue;
-    for (const [variant, bytes] of messageVariants(challenge, publicKey)) {
-      try {
-        if (await subtle.verify({ name: 'Ed25519' }, key, sig as BufferSource, bytes as BufferSource)) {
-          matches.push(`${encoding}+${variant}`);
-          if (variant === 'plain' && !plainSignature) plainSignature = sig;
+  let plainKeyLabel: string | null = null;
+  let ed25519Supported = false;
+
+  for (const candidate of keys) {
+    let key: CryptoKey;
+    try {
+      key = await subtle.importKey('raw', candidate.bytes as BufferSource, { name: 'Ed25519' }, false, ['verify']);
+      ed25519Supported = true;
+    } catch {
+      continue;
+    }
+    const variants = messageVariants(challenge, candidate.bytes);
+    const lenient = lenientBase64(challenge);
+    if (lenient) variants.push(['text-read-as-base64', lenient]);
+
+    for (const [encoding, sig] of decodings) {
+      if (!sig) continue;
+      for (const [variant, bytes] of variants) {
+        try {
+          if (await subtle.verify({ name: 'Ed25519' }, key, sig as BufferSource, bytes as BufferSource)) {
+            matches.push(`${encoding}+${variant} with ${candidate.label} key`);
+            if (variant === 'plain' && !plainSignature) {
+              plainSignature = sig;
+              plainKeyLabel = candidate.label;
+            }
+          }
+        } catch {
+          // A malformed candidate just doesn't match.
         }
-      } catch {
-        // A malformed candidate just doesn't match.
       }
     }
   }
 
+  if (!ed25519Supported) {
+    return { plainSignature: null, plainKeyLabel: null, summary: `no local check (Ed25519 unsupported) · ${rawInfo}` };
+  }
+  const keyList = keys.map(k => `${k.label} ${shortAddress(k.bytes)}`).join(', ');
   return {
     plainSignature,
+    plainKeyLabel,
     summary: matches.length
-      ? `match: ${matches.join(', ')} · ${rawInfo}`
-      : `no match for this wallet's key · ${rawInfo}`,
+      ? `match: ${matches.join('; ')} · keys: ${keyList}`
+      : `no match · keys: ${keyList} · ${rawInfo}`,
   };
 }
 
