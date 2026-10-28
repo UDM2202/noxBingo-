@@ -14,7 +14,8 @@ import NoxLoader from '../components/NoxLoader'
 function Lobby() {
   usePageMeta(
     'NoxBingo — Solana Bingo Game, Win Real OREN Crypto',
-    'Play crypto bingo on Solana and win real OREN tokens. Connect your wallet, join a room, and play bingo for real money prizes on NoxBingo.'
+    'Play crypto bingo on Solana and win real OREN tokens. Connect your wallet, join a room, and play bingo for real money prizes on NoxBingo.',
+    '/'
   )
   const navigate = useNavigate()
   const [isInitiating, setIsInitiating] = useState(false)
