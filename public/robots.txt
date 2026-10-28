@@ -1,6 +1,8 @@
 User-agent: *
 Allow: /
 Disallow: /admin
-Disallow: /admin/dashboard
+Disallow: /auth
+Disallow: /room/
+Disallow: /miniapp
 
 Sitemap: https://www.noxbingo.io/sitemap.xml
