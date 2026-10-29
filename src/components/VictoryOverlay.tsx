@@ -1,6 +1,8 @@
 ﻿import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import type { BingoCard } from '../types/game';
+import type { ShareResult } from '../hooks/useMultiplayer';
+import SharePanel from './SharePanel';
 interface VictoryOverlayProps {
   winningCardIndex: number | null;
   bonusCardIndex: number | null;
@@ -32,8 +34,11 @@ interface VictoryOverlayProps {
   jackpotAmount?: number | null;
   jackpotSignature?: string | null;
   jackpotError?: string | null;
+  // Present only after a paid game, once the server has saved the result.
+  shareResult?: ShareResult | null;
+  onSetShareName?: (resultId: string, displayName: string, source: 'farcaster' | 'typed') => void;
 }
-function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount, jackpotWon, jackpotAmount, jackpotSignature, jackpotError }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount, jackpotWon, jackpotAmount, jackpotSignature, jackpotError, shareResult, onSetShareName }: VictoryOverlayProps) {
   const drawnNumbers = new Set(drawnBalls);
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
@@ -277,6 +282,12 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndex, roomCode, cards, dra
                 Sending your jackpot…
               </p>
             )}
+          </motion.div>
+        )}
+
+        {shareResult && onSetShareName && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }}>
+            <SharePanel result={shareResult} onSetShareName={onSetShareName} />
           </motion.div>
         )}
 

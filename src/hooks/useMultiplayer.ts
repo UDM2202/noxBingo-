@@ -14,6 +14,15 @@ type PlayerInfo = {
   bundleId: string | null;
   cardCount: number;
 };
+export type ShareResult = {
+  resultId: string;
+  outcome: 'win' | 'loss';
+  amountOren: number;
+  noxBonus: number;
+  jackpotOren: number;
+  // The server only accepts the card's name once per result.
+  nameSaved: boolean;
+};
 type MultiplayerState = {
   connected: boolean;
   roomCode: string | null;
@@ -65,6 +74,9 @@ type MultiplayerState = {
   // One-time message the server asks the wallet to sign, proving the
   // player controls the address they connect.
   walletChallenge: string | null;
+  // This player's result from the last paid game, ready to share.
+  // Written by the server, so the amount can't be faked.
+  shareResult: ShareResult | null;
 };
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
 export function useMultiplayer() {
@@ -113,6 +125,7 @@ export function useMultiplayer() {
     jackpotError: null,
     practice: false,
     walletChallenge: null,
+    shareResult: null,
   });
   useEffect(() => {
     mountedRef.current = true;
@@ -167,6 +180,7 @@ export function useMultiplayer() {
               jackpotAmountOren: message.jackpotAmountOren ?? prev.jackpotAmountOren,
               practice: (message as { practice?: boolean }).practice === true,
               phase: 'lobby',
+              shareResult: null,
             };
           case 'player_joined':
           case 'player_left':
@@ -186,7 +200,7 @@ export function useMultiplayer() {
             };
           }
           case 'cards_dealt':
-            return { ...prev, cards: message.cards, phase: 'playing', currentBall: null, drawnBalls: [] };
+            return { ...prev, cards: message.cards, phase: 'playing', currentBall: null, drawnBalls: [], shareResult: null };
           case 'ball_drawn':
             return { ...prev, currentBall: message.ball, currentLetter: message.letter, drawnBalls: [...prev.drawnBalls, message.ball] };
           case 'bingo':
@@ -226,13 +240,35 @@ export function useMultiplayer() {
               roomCode: null, playerId: null, hostId: null, players: [], phase: 'idle', cards: [],
               currentBall: null, currentLetter: null, drawnBalls: [],
               winningPlayerId: null, winningPlayerName: null, bonusWinnerId: null,
-              bonusAmounts: [], bonusWinnerName: null, cardIndex: null,
+              bonusAmounts: [], bonusWinnerName: null, cardIndex: null, shareResult: null,
               error: message.reason === 'wallet_timeout'
                 ? "You were removed for not connecting a wallet in time."
                 : message.reason === 'fee_timeout'
                 ? "You were removed for not paying the entry fee in time."
                 : "You were removed from the room by the host.",
             };
+          case 'share_result':
+            return {
+              ...prev,
+              shareResult: {
+                resultId: message.resultId,
+                outcome: message.outcome === 'win' ? 'win' : 'loss',
+                amountOren: Number(message.amountOren) || 0,
+                noxBonus: Number(message.noxBonus) || 0,
+                jackpotOren: prev.shareResult && prev.shareResult.resultId === message.resultId ? prev.shareResult.jackpotOren : 0,
+                nameSaved: false,
+              },
+            };
+          case 'share_result_jackpot': {
+            const current = prev.shareResult;
+            if (!current || current.resultId !== message.resultId) return prev;
+            return { ...prev, shareResult: { ...current, jackpotOren: Number(message.jackpotOren) || 0 } };
+          }
+          case 'share_name_saved': {
+            const current = prev.shareResult;
+            if (!current || current.resultId !== message.resultId) return prev;
+            return { ...prev, shareResult: { ...current, nameSaved: true } };
+          }
           case 'wallet_challenge':
             return { ...prev, walletChallenge: message.message };
           case 'error':
@@ -300,7 +336,18 @@ export function useMultiplayer() {
       jackpotEnabled: false, jackpotAmountOren: 0,
       jackpotWon: false, jackpotWinnerId: null, jackpotWinnerName: null,
       jackpotWonAmount: null, jackpotSignature: null, jackpotError: null, practice: false,
+      shareResult: null,
     }));
   }, []);
-  return { ...state, createRoom, joinRoom, setWallet, submitEntryFee, removePlayer, startGame, leaveRoom };
+  // Sent once, before the first share. Marked saved right away so a
+  // second share button press doesn't send it again.
+  const setShareName = useCallback((resultId: string, displayName: string, source: 'farcaster' | 'typed') => {
+    setState(prev => {
+      const current = prev.shareResult;
+      if (!current || current.resultId !== resultId) return prev;
+      return { ...prev, shareResult: { ...current, nameSaved: true } };
+    });
+    sendWhenReady({ type: 'set_share_name', resultId, displayName, source });
+  }, []);
+  return { ...state, createRoom, joinRoom, setWallet, submitEntryFee, removePlayer, startGame, leaveRoom, setShareName };
 }
