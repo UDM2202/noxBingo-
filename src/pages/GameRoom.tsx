@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWallet } from '@solana/wallet-adapter-react'
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
@@ -23,18 +23,32 @@ import { useAppEnv, FARCASTER_WALLET_NAME } from '../appEnv';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { normaliseSignature, describeSignature, bytesToBase64, checkSignature, type CandidateKey } from '../utils/walletSignature';
 import { PublicKey } from '@solana/web3.js';
+import { loadPendingPayment, savePendingPayment, clearPendingPayment, type PendingPayment } from '../utils/pendingPayment';
+import { loadSession, markResultSaved } from '../utils/gameSession';
+import { useWalletBalances, formatBalance } from '../hooks/useWalletBalances';
 
 function GameRoom() {
   const { roomCode } = useParams<{ roomCode: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const mode = searchParams.get('mode') || 'solo';
   const playerName = searchParams.get('name') || 'Player';
   const maxPlayers = parseInt(searchParams.get('maxPlayers') || '6', 10);
 
+  // A seat this browser still holds for THIS page's game: the same room
+  // code in the URL, or a solo game still in progress. When there is one,
+  // the page takes it back instead of creating or joining a new room.
+  const [resumeSession] = useState(() => {
+    const session = loadSession();
+    if (!session) return null;
+    if (roomCode && roomCode !== 'new' && session.roomCode === roomCode.toUpperCase()) return session;
+    if (mode === 'solo' && session.mode === 'solo' && !session.finished && (!roomCode || roomCode === 'new')) return session;
+    return null;
+  });
 
   const { state: soloState, dispatch, deployCards } = useGameReducer();
-  const multi = useMultiplayer();
+  const multi = useMultiplayer({ resumeSession });
   const { publicKey, connect, connecting, wallet, wallets, select, signMessage } = useWallet();
   // Decided by WHERE the app is running (set once in App.tsx), not by the
   // URL. Inside Farcaster every room page uses the Farcaster wallet, and
@@ -62,6 +76,7 @@ function GameRoom() {
     }
   }
   const { payEntryFee, payEntryFeeSol } = useSolanaContract();
+  const walletBalances = useWalletBalances();
   const [payingFee, setPayingFee] = useState(false);
   const [feeError, setFeeError] = useState<string | null>(null);
   const [selectedBundleId, setSelectedBundleId] = useState<string>('single');
@@ -113,7 +128,11 @@ function GameRoom() {
   const myPlayerId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isMultiplayer && multi.error && multi.phase === 'idle' && multi.roomCode === null && hasConnected.current) {
+    if (
+      isMultiplayer && multi.error && multi.phase === 'idle' && multi.roomCode === null && hasConnected.current &&
+      // A dropped connection or a seat being restored isn't a removal.
+      !multi.resuming && multi.connectionStatus === 'connected'
+    ) {
       // roomCode/phase getting reset alongside an error message means
       // we were removed (kicked or wallet-timed-out), not just a
       // normal in-room error — bounce back to the home screen.
@@ -122,23 +141,41 @@ function GameRoom() {
     }
   }, [isMultiplayer, multi.error, multi.phase, multi.roomCode, navigate]);
 
+  function requestRoom() {
+    hasConnected.current = true;
+    const wallet = publicKey?.toBase58() || null;
+    // useMultiplayer queues the message until the socket is genuinely
+    // open, so there's no need for an artificial delay here — firing
+    // immediately just means the room code appears as soon as the
+    // server actually responds.
+    if (mode === 'create') {
+      multi.createRoom(playerName, wallet, maxPlayers);
+    } else if (mode === 'solo') {
+      multi.createRoom(playerName, wallet, 1, true);
+    } else if (mode === 'join' && roomCode && roomCode !== 'new') {
+      multi.joinRoom(roomCode, playerName, wallet);
+    }
+  }
+
   useEffect(() => {
     if (isMultiplayer && !hasConnected.current) {
-      hasConnected.current = true;
-      const wallet = publicKey?.toBase58() || null;
-      // sendWhenReady inside useMultiplayer already queues the message
-      // until the socket is genuinely open, so there's no need for an
-      // artificial delay here — firing immediately just means the room
-      // code appears as soon as the server actually responds.
-      if (mode === 'create') {
-        multi.createRoom(playerName, wallet, maxPlayers);
-      } else if (mode === 'solo') {
-        multi.createRoom(playerName, wallet, 1, true);
-      } else if (mode === 'join' && roomCode) {
-        multi.joinRoom(roomCode, playerName, wallet);
+      if (resumeSession) {
+        // Taking back a held seat (after a reload). If that fails, the
+        // effect further down falls back to creating or joining.
+        hasConnected.current = true;
+        return;
       }
+      requestRoom();
     }
   }, [isMultiplayer, mode, roomCode, playerName, publicKey]);
+
+  // Keep the room code in the URL, so a reload finds this game's stored
+  // seat (games created from /room/new would otherwise create a new room).
+  useEffect(() => {
+    if (!isMultiplayer || !multi.roomCode || !location.pathname.startsWith('/room/')) return;
+    if (roomCode?.toUpperCase() === multi.roomCode) return;
+    navigate('/room/' + multi.roomCode + location.search, { replace: true });
+  }, [isMultiplayer, multi.roomCode]);
 
   // If the wallet connects after the room's already been created/joined,
   // push the address up once it lands — needed so the server knows
@@ -241,6 +278,22 @@ function GameRoom() {
     void verifyWallet();
   }, [isMultiplayer, isPractice, publicKey, multi.playerId, multi.walletChallenge]);
 
+  // The seat couldn't be taken back: start over the normal way. A saved
+  // payment still shows in the new room, so it can be confirmed there.
+  const [seatNotice, setSeatNotice] = useState<string | null>(null);
+  const handledResumeFailure = useRef<typeof multi.resumeFailed>(null);
+  useEffect(() => {
+    if (!isMultiplayer || !multi.resumeFailed || handledResumeFailure.current === multi.resumeFailed) return;
+    handledResumeFailure.current = multi.resumeFailed;
+    if (multi.resumeFailed.reason === 'expired' && !multi.resumeFailed.roomStarted) {
+      setSeatNotice('You were away too long and your seat was released.');
+    }
+    // The new connection has no wallet attached yet, so verify again.
+    syncedWalletKey.current = null;
+    setVerifiedSigningAddress(null);
+    requestRoom();
+  }, [isMultiplayer, multi.resumeFailed]);
+
   useEffect(() => {
     if (!isMultiplayer && roomCode === 'new') {
       dispatch({ type: 'START_COUNTDOWN' });
@@ -278,12 +331,13 @@ function GameRoom() {
   const winningCardIndex = isMultiplayer
     ? (multi.winningPlayerId === multi.playerId ? multi.cardIndex : null)
     : soloState.winningCardIndex;
-  const totalBonusAmount = isMultiplayer
-    ? multi.bonusAmounts.reduce((sum, a) => sum + a, 0)
-    : 25;
-  const bonusWinner = isMultiplayer
-    ? (multi.bonusWinnerId === multi.playerId ? 0 : null)
-    : soloState.bonusWinner;
+  // Every one of this player's cards whose NOX number was drawn. Each
+  // earns its own bonus.
+  const bonusCardIndexes = isMultiplayer
+    ? multi.myBonusCardIndexes
+    : soloState.bonusWinner !== null ? [soloState.bonusWinner] : [];
+  const noxBonusPerHit = isMultiplayer ? multi.noxBonusDisplay : 25;
+  const totalBonusAmount = noxBonusPerHit * bonusCardIndexes.length;
   const isMultiplayerWinner = isMultiplayer && multi.winningPlayerId === multi.playerId;
   const isMultiplayerLoser = isMultiplayer && multi.winningPlayerId !== null && multi.winningPlayerId !== '' && multi.winningPlayerId !== multi.playerId;
   const winnerName = isMultiplayer ? multi.winningPlayerName : null;
@@ -309,7 +363,8 @@ function GameRoom() {
   useEffect(() => {
     if (phase === 'playing' && !hasPlayedGameStart.current && cards.length > 0) {
       hasPlayedGameStart.current = true;
-      play('gameStart');
+      // A game being restored after a reconnect already started.
+      if (!multi.restored) play('gameStart');
     }
     if (phase !== 'playing') hasPlayedGameStart.current = false;
   }, [phase, cards.length, play]);
@@ -318,6 +373,9 @@ function GameRoom() {
     if (phase === 'playing' && currentBall !== null) {
       if (currentBall !== prevDrawIndex.current) {
         prevDrawIndex.current = currentBall as number;
+        // Balls replayed while restoring a seat were already drawn; only
+        // call the ones that arrive live.
+        if (isMultiplayer && drawnBalls.length <= multi.replayBallCount) return;
         play('ballDraw');
         const letter = getLetterForNumber(currentBall as number);
         setTimeout(() => speakNumber(letter, currentBall as number), 300);
@@ -328,28 +386,33 @@ function GameRoom() {
   }, [phase, currentBall, play, speakNumber]);
 
   useEffect(() => {
-    if (phase === 'finished' && prevPhase.current !== 'finished') {
-      const hasWin = winningCardIndex !== null || bonusWinner !== null;
+    // Once per room: a resume replays game_over, which must not award
+    // anything a second time.
+    const resultKey = isMultiplayer ? multi.roomCode : null;
+    if (phase === 'finished' && prevPhase.current !== 'finished' && (!resultKey || markResultSaved(resultKey))) {
+      const hasWin = winningCardIndex !== null || bonusCardIndexes.length > 0;
       if (hasWin) {
       play('win');
+      let won = 0;
       if (winningCardIndex !== null) {
-        updateBalance(100);
+        won += 100;
         saveGameResult('win', 100, displayRoomCode || 'solo', mode);
       }
-      if (bonusWinner !== null) {
-        updateBalance(totalBonusAmount);
-        saveGameResult('bonus', 25, displayRoomCode || 'solo', mode);
+      if (bonusCardIndexes.length > 0) {
+        won += totalBonusAmount;
+        saveGameResult('bonus', totalBonusAmount, displayRoomCode || 'solo', mode);
       }
+      updateBalance(won);
     } else if (phase === 'finished') {
       saveGameResult('loss', 0, displayRoomCode || 'solo', mode);
     }
     }
     prevPhase.current = phase;
-  }, [phase, winningCardIndex, bonusWinner, play]);
+  }, [phase, winningCardIndex, bonusCardIndexes.length, play]);
 
   useEffect(() => {
     if (phase === 'finished' && !showVictory) {
-      const hasWin = winningCardIndex !== null || bonusWinner !== null;
+      const hasWin = winningCardIndex !== null || bonusCardIndexes.length > 0;
       if (hasWin) {
         setVictoryPhase('winning-cell');
         victoryTimerRef.current = setTimeout(() => setVictoryPhase('card-scale'), 400);
@@ -363,7 +426,7 @@ function GameRoom() {
       }
     }
     return () => { if (victoryTimerRef.current) clearTimeout(victoryTimerRef.current); };
-  }, [phase, winningCardIndex, bonusWinner, showVictory]);
+  }, [phase, winningCardIndex, bonusCardIndexes.length, showVictory]);
 
   function updateBalance(amount: number) {
     const newBal = balance + amount;
@@ -425,25 +488,142 @@ function GameRoom() {
     return () => { cancelled = true; };
   }, [selectedCurrency, selectedBundleId]);
 
+  // True from sending a payment for checking until the server answers.
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  useEffect(() => {
+    if (checkingPayment && (multi.entryFeeError || meInRoom?.paidEntryFee)) setCheckingPayment(false);
+  }, [checkingPayment, multi.entryFeeError, meInRoom?.paidEntryFee]);
+  useEffect(() => {
+    // Never leave the button stuck if the server doesn't answer at all.
+    if (!checkingPayment) return;
+    const timer = window.setTimeout(() => {
+      setCheckingPayment(false);
+      setFeeError('No answer from the server yet. Your payment is saved, so tap Confirm my payment to try again.');
+    }, 30000);
+    return () => window.clearTimeout(timer);
+  }, [checkingPayment]);
+
+  // Re-sends an already-made payment for checking. Never charges again.
+  function handleResubmitPendingPayment() {
+    if (!pendingPayment || checkingPayment) return;
+    setFeeError(null);
+    setCheckingPayment(true);
+    multi.submitEntryFee(pendingPayment.signature, pendingPayment.bundleId, pendingPayment.currency);
+    void walletBalances.refresh();
+  }
+
+  // Lets the player abandon a saved payment and pay fresh. Kept behind a
+  // confirm because it means paying again.
+  function handleDiscardPendingPayment() {
+    if (!pendingPayment) return;
+    const ok = window.confirm(
+      `You already paid ${pendingPayment.amount.toFixed(pendingPayment.currency === 'SOL' ? 5 : 2)} ${pendingPayment.currency}. ` +
+      'Paying again will charge you again. Only do this if support has told you to. Continue?'
+    );
+    if (!ok) return;
+    clearPendingPayment(pendingPayment.wallet);
+    setPendingPayment(null);
+  }
+
+  // The saved, not-yet-confirmed payment for the connected wallet, if any.
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  useEffect(() => {
+    setPendingPayment(publicKey ? loadPendingPayment(publicKey.toBase58()) : null);
+  }, [publicKey]);
+
+  // Once the server confirms the entry, the saved payment is done with.
+  useEffect(() => {
+    if (pendingPayment && meInRoom?.paidEntryFee) {
+      clearPendingPayment(pendingPayment.wallet);
+      setPendingPayment(null);
+    }
+  }, [pendingPayment, meInRoom?.paidEntryFee]);
+
+  // The server only accepts a transaction once. If it says this one was
+  // already used, it can't be retried here; support has to sort it out.
+  useEffect(() => {
+    if (pendingPayment && multi.entryFeeError && /already been used/i.test(multi.entryFeeError)) {
+      clearPendingPayment(pendingPayment.wallet);
+      setPendingPayment(null);
+      setFeeError(
+        `That payment was already used for an entry. If you weren't placed in a game, contact support with this transaction: ${pendingPayment.signature}`
+      );
+    }
+  }, [pendingPayment, multi.entryFeeError]);
+
+  // Balances change once an entry is confirmed or a prize lands.
+  useEffect(() => {
+    if (meInRoom?.paidEntryFee || multi.payoutSignature) void walletBalances.refresh();
+  }, [meInRoom?.paidEntryFee, multi.payoutSignature]);
+
+  // NOX comes from the same place the lobby reads it.
+  const noxBalance = (() => {
+    try {
+      const saved = localStorage.getItem('noxbingo-balance');
+      return saved ? parseInt(saved, 10) : 1000;
+    } catch {
+      return null;
+    }
+  })();
+
+  // Price of the selected bundle in the selected currency (null while a
+  // SOL quote is still loading), and whether the wallet can cover it.
+  const selectedBundle = multi.bundles.find(b => b.id === selectedBundleId);
+  const selectedPrice = !selectedBundle
+    ? null
+    : selectedCurrency === 'OREN'
+      ? bundleOrenPrice(selectedBundle, multi.orenToGbpRate)
+      : solUsdPrice ? bundleSolPrice(selectedBundle, multi.gbpToUsdtRate, solUsdPrice) : null;
+  const selectedBalance = selectedCurrency === 'OREN' ? walletBalances.oren : walletBalances.sol;
+  const notEnoughBalance = selectedPrice !== null && selectedBalance !== null && selectedBalance < selectedPrice;
+  const isSoloRoom = multi.isSolo ?? mode === 'solo';
+
+  const balanceRow = (
+    <p style={{ color: '#8B8BD4', fontSize: '12px', fontFamily: 'monospace', textAlign: 'center' }}>
+      {formatBalance(walletBalances.oren, 2)} OREN · {formatBalance(walletBalances.sol, 3)} SOL · {formatBalance(noxBalance, 0)} NOX
+    </p>
+  );
+
   async function handlePayEntryFee() {
+    // A payment that already went through must be re-checked, not repeated.
+    if (pendingPayment) {
+      handleResubmitPendingPayment();
+      return;
+    }
     const bundle = multi.bundles.find(b => b.id === selectedBundleId);
-    if (!bundle) return;
+    if (!bundle || !publicKey) return;
     setFeeError(null);
     setPayingFee(true);
     try {
+      let signature: string;
+      let amount: number;
       if (selectedCurrency === 'OREN') {
-        const orenAmount = bundleOrenPrice(bundle, multi.orenToGbpRate);
-        const signature = await payEntryFee(orenAmount);
-        multi.submitEntryFee(signature, bundle.id, 'OREN');
+        amount = bundleOrenPrice(bundle, multi.orenToGbpRate);
+        signature = await payEntryFee(amount);
       } else {
         if (!solUsdPrice) {
           setFeeError('Still fetching a live SOL price — try again in a moment.');
           return;
         }
-        const solAmount = bundleSolPrice(bundle, multi.gbpToUsdtRate, solUsdPrice);
-        const signature = await payEntryFeeSol(solAmount);
-        multi.submitEntryFee(signature, bundle.id, 'SOL');
+        amount = bundleSolPrice(bundle, multi.gbpToUsdtRate, solUsdPrice);
+        signature = await payEntryFeeSol(amount);
       }
+      // Save the payment BEFORE asking the server to check it, so a failed
+      // check can be retried with this same transaction.
+      const pending: PendingPayment = {
+        wallet: publicKey.toBase58(),
+        signature,
+        bundleId: bundle.id,
+        bundleLabel: bundle.label,
+        currency: selectedCurrency,
+        amount,
+        createdAt: Date.now(),
+      };
+      savePendingPayment(pending);
+      setPendingPayment(pending);
+      setCheckingPayment(true);
+      multi.submitEntryFee(signature, bundle.id, selectedCurrency);
+      void walletBalances.refresh();
     } catch (err) {
       // Log the wallet/RPC's own error text for diagnosis, but keep it
       // off the screen — players only see the friendly message.
@@ -477,6 +657,30 @@ function GameRoom() {
         balance={balance}
       />
 
+      {isMultiplayer && (multi.sessionReplaced || multi.resuming || (multi.roomCode && multi.connectionStatus !== 'connected')) && (
+        <div
+          role="status"
+          style={{ position: 'fixed', top: '48px', left: 0, right: 0, zIndex: 40, display: 'flex', justifyContent: 'center', padding: '0 16px', pointerEvents: 'none' }}
+        >
+          <p style={{
+            color: multi.sessionReplaced ? '#FF6464' : '#FFD700',
+            fontSize: '13px',
+            fontWeight: 600,
+            textAlign: 'center',
+            background: 'rgba(11,11,69,0.92)',
+            border: multi.sessionReplaced ? '1px solid rgba(255,100,100,0.35)' : '1px solid rgba(255,215,0,0.35)',
+            borderRadius: '8px',
+            padding: '8px 16px',
+          }}>
+            {multi.sessionReplaced
+              ? multi.error
+              : multi.roomCode && multi.connectionStatus !== 'connected'
+                ? 'Reconnecting… your seat is held.'
+                : 'Restoring your game…'}
+          </p>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto px-4 pb-4" style={{ paddingTop: '12px' }}>
         {isMultiplayer && phase === 'lobby' && (
           <div className="flex flex-col items-center justify-center min-h-[400px] gap-6">
@@ -484,6 +688,11 @@ function GameRoom() {
             {multi.jackpotEnabled && multi.jackpotAmountOren > 0 && (
               <p style={{ color: '#FFD700', fontSize: '13px', fontWeight: 700, background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.3)', borderRadius: '8px', padding: '8px 16px' }}>
                 {'💰'} Jackpot: {multi.jackpotAmountOren.toLocaleString(undefined, { maximumFractionDigits: 0 })} OREN
+              </p>
+            )}
+            {seatNotice && (
+              <p style={{ color: '#FFD700', fontSize: '13px', textAlign: 'center', maxWidth: '300px', background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)', borderRadius: '8px', padding: '8px 16px' }}>
+                {seatNotice}
               </p>
             )}
             {multi.hostChangeNotice && (
@@ -499,6 +708,9 @@ function GameRoom() {
               {multi.players.map(p => (
                 <p key={p.id} className="text-white text-lg flex items-center gap-2">
                   {p.name} {p.id === (myPlayerId.current || multi.playerId) ? '(You)' : ''}
+                  {p.connected === false && (
+                    <span style={{ color: '#8B8BD4', fontSize: '12px' }}>(reconnecting…)</span>
+                  )}
                   {!isPractice && !p.walletAddress && (
                     <span style={{ color: '#5C5C9E', fontSize: '12px' }}>(no wallet)</span>
                   )}
@@ -601,10 +813,57 @@ function GameRoom() {
 
             {publicKey && walletVerified && !(multi.players.find(p => p.id === (myPlayerId.current || multi.playerId))?.paidEntryFee) && (
               <div className="flex flex-col items-center gap-3">
+                {pendingPayment ? (
+                  <>
+                    <p style={{ color: '#5C5C9E', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                      Payment received
+                    </p>
+                    {balanceRow}
+                    <p style={{ color: '#8B8BD4', fontSize: '13px', textAlign: 'center', maxWidth: '290px' }}>
+                      You already paid{' '}
+                      <span style={{ color: '#FFD700', fontWeight: 700 }}>
+                        {pendingPayment.amount.toFixed(pendingPayment.currency === 'SOL' ? 5 : 2)} {pendingPayment.currency}
+                      </span>{' '}
+                      for {pendingPayment.bundleLabel}. Tap below to confirm it. You won't be charged again.
+                    </p>
+                    <motion.button
+                      onClick={handleResubmitPendingPayment}
+                      disabled={checkingPayment}
+                      style={{
+                        opacity: checkingPayment ? 0.6 : 1,
+                        padding: '12px 32px',
+                        fontSize: '15px',
+                        fontWeight: 700,
+                        letterSpacing: '0.05em',
+                        backgroundColor: 'rgba(0,229,255,0.1)',
+                        border: '1px solid rgba(0,229,255,0.4)',
+                        borderRadius: '10px',
+                        color: '#00E5FF',
+                        cursor: checkingPayment ? 'wait' : 'pointer',
+                      }}
+                      whileHover={{ scale: checkingPayment ? 1 : 1.03 }}
+                      whileTap={{ scale: checkingPayment ? 1 : 0.97 }}
+                    >
+                      {checkingPayment ? 'Checking your payment…' : 'Confirm my payment'}
+                    </motion.button>
+                    {(feeError || multi.entryFeeError) && (
+                      <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px', wordBreak: 'break-word' }}>
+                        {feeError || multi.entryFeeError}
+                      </p>
+                    )}
+                    <button
+                      onClick={handleDiscardPendingPayment}
+                      style={{ background: 'none', border: 'none', color: '#5C5C9E', fontSize: '11px', textDecoration: 'underline', cursor: 'pointer' }}
+                    >
+                      Make a new payment instead
+                    </button>
+                  </>
+                ) : (<>
                 <p style={{ color: '#5C5C9E', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   Choose your cards
                 </p>
-                <div className="flex gap-2">
+                {balanceRow}
+                <div className="flex gap-2 flex-wrap justify-center">
                   {multi.bundles.map(bundle => {
                     const isSelected = bundle.id === selectedBundleId;
                     return (
@@ -624,6 +883,11 @@ function GameRoom() {
                       >
                         <div style={{ fontWeight: 700, fontSize: '14px' }}>{bundle.label}</div>
                         <div style={{ fontSize: '13px', marginTop: '4px' }}>£{bundle.priceGBP.toFixed(2)}</div>
+                        {isSoloRoom && typeof multi.soloMultipliers[bundle.id] === 'number' && (
+                          <div style={{ fontSize: '11px', marginTop: '4px', color: '#00E5FF' }}>
+                            Win up to {(bundleOrenPrice(bundle, multi.orenToGbpRate) * multi.soloMultipliers[bundle.id]).toLocaleString(undefined, { maximumFractionDigits: 2 })} OREN
+                          </div>
+                        )}
                       </button>
                     );
                   })}
@@ -675,9 +939,25 @@ function GameRoom() {
                   );
                 })()}
 
+                <div className="flex flex-col items-center gap-1" style={{ fontSize: '12px', color: '#8B8BD4', textAlign: 'center', maxWidth: '300px' }}>
+                  {!isSoloRoom && multi.rakePercent !== null && (
+                    <p>Winner takes {Math.round((100 - multi.rakePercent * 100) * 100) / 100}% of the pot</p>
+                  )}
+                  {multi.jackpotEnabled && (
+                    <p>Jackpot: {multi.jackpotAmountOren.toLocaleString(undefined, { maximumFractionDigits: 0 })} OREN (random bonus on a winning game)</p>
+                  )}
+                  <p>NOX bonus: +{multi.noxBonusDisplay} NOX per NOX number hit</p>
+                </div>
+
+                {notEnoughBalance && (
+                  <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center' }}>
+                    Not enough {selectedCurrency} for this bundle
+                  </p>
+                )}
+
                 <motion.button
                   onClick={handlePayEntryFee}
-                  disabled={payingFee || (selectedCurrency === 'SOL' && !solUsdPrice)}
+                  disabled={payingFee || notEnoughBalance || (selectedCurrency === 'SOL' && !solUsdPrice)}
                   style={{
                     padding: '12px 32px',
                     fontSize: '15px',
@@ -687,22 +967,23 @@ function GameRoom() {
                     border: '1px solid rgba(255,215,0,0.4)',
                     borderRadius: '10px',
                     color: '#FFD700',
-                    cursor: payingFee ? 'wait' : 'pointer',
-                    opacity: payingFee ? 0.6 : 1,
+                    cursor: payingFee ? 'wait' : notEnoughBalance ? 'not-allowed' : 'pointer',
+                    opacity: payingFee || notEnoughBalance ? 0.6 : 1,
                   }}
-                  whileHover={{ scale: payingFee ? 1 : 1.03 }}
-                  whileTap={{ scale: payingFee ? 1 : 0.97 }}
+                  whileHover={{ scale: payingFee || notEnoughBalance ? 1 : 1.03 }}
+                  whileTap={{ scale: payingFee || notEnoughBalance ? 1 : 0.97 }}
                 >
                   {payingFee ? 'Sending…' : `Pay with ${selectedCurrency}`}
                 </motion.button>
                 {(feeError || multi.entryFeeError) && (
-                  <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>
+                  <p style={{ color: '#FF6464', fontSize: '12px', textAlign: 'center', maxWidth: '280px', wordBreak: 'break-word' }}>
                     {feeError || multi.entryFeeError}
                   </p>
                 )}
                 <p style={{ color: '#8B8BD4', fontSize: '12px', textAlign: 'center', maxWidth: '280px' }}>
                   You'll be removed from the room if you don't pay within 90 seconds of connecting.
                 </p>
+                </>)}
               </div>
             )}
 
@@ -844,7 +1125,7 @@ function GameRoom() {
         {showVictory && phase === 'finished' && (
           <VictoryOverlay
             winningCardIndex={winningCardIndex}
-            bonusCardIndex={bonusWinner}
+            bonusCardIndexes={bonusCardIndexes}
             roomCode={displayRoomCode || ''}
             cards={cards}
             drawnBalls={drawnBalls}

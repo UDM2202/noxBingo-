@@ -8,7 +8,8 @@ import NoxLoader from '../components/NoxLoader';
 function Leaderboard() {
     usePageMeta(
   'NoxBingo Leaderboard — Top Solana Bingo Winners',
-  "See who's winning the most OREN playing crypto bingo on NoxBingo, the Solana-powered bingo game with real money prizes."
+  "See who's winning the most OREN playing crypto bingo on NoxBingo, the Solana-powered bingo game with real money prizes.",
+  '/leaderboard'
 )
   const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
