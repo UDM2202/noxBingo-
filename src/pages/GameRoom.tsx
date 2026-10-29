@@ -1151,6 +1151,9 @@ function GameRoom() {
             jackpotAmount={multi.jackpotWonAmount}
             jackpotSignature={multi.jackpotSignature}
             jackpotError={multi.jackpotError}
+            /* Sharing is only offered for paid games. */
+            shareResult={isMultiplayer && !isPractice ? multi.shareResult : null}
+            onSetShareName={multi.setShareName}
           />
         )}
       {showLeaveConfirm && (

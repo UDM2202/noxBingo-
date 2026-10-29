@@ -23,6 +23,15 @@ export type ResumeFailure = {
   // Whether the game had started before the seat was lost.
   roomStarted: boolean;
 };
+export type ShareResult = {
+  resultId: string;
+  outcome: 'win' | 'loss';
+  amountOren: number;
+  noxBonus: number;
+  jackpotOren: number;
+  // The server only accepts the card's name once per result.
+  nameSaved: boolean;
+};
 type MultiplayerState = {
   connected: boolean;
   connectionStatus: ConnectionStatus;
@@ -94,6 +103,9 @@ type MultiplayerState = {
   // One-time message the server asks the wallet to sign, proving the
   // player controls the address they connect.
   walletChallenge: string | null;
+  // This player's result from the last paid game, ready to share.
+  // Written by the server, so the amount can't be faked.
+  shareResult: ShareResult | null;
 };
 
 // Everything about the current room, reset when leaving it or when a

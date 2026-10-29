@@ -1,6 +1,8 @@
 ﻿import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import type { BingoCard } from '../types/game';
+import type { ShareResult } from '../hooks/useMultiplayer';
+import SharePanel from './SharePanel';
 interface VictoryOverlayProps {
   winningCardIndex: number | null;
   // Every card whose NOX number was drawn; each one earns a bonus.
@@ -33,6 +35,9 @@ interface VictoryOverlayProps {
   jackpotAmount?: number | null;
   jackpotSignature?: string | null;
   jackpotError?: string | null;
+  // Present only after a paid game, once the server has saved the result.
+  shareResult?: ShareResult | null;
+  onSetShareName?: (resultId: string, displayName: string, source: 'farcaster' | 'typed') => void;
 }
 function VictoryOverlay({ winningCardIndex, bonusCardIndexes, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount, jackpotWon, jackpotAmount, jackpotSignature, jackpotError }: VictoryOverlayProps) {
   const drawnNumbers = new Set(drawnBalls);
