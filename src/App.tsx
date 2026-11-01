@@ -19,6 +19,7 @@ import AnimatedBackground from './components/AnimatedBackground'
 import Lobby from './pages/Lobby'
 import Auth from './pages/Auth'
 import Leaderboard from './pages/Leaderboard'
+import About from './pages/About'
 import GameRoom from './pages/GameRoom'
 import AdminLogin from './pages/AdminLogin'
 import AdminDashboard from './pages/AdminDashboard'
@@ -263,6 +264,7 @@ function App() {
               <Route path="/" element={<Lobby />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/about" element={<About />} />
               <Route path="/room/:roomCode" element={<GameRoom />} />
               <Route path="/admin" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />

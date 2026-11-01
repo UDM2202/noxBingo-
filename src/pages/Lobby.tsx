@@ -662,6 +662,13 @@ function Lobby() {
                 >
                   View Leaderboard
                 </Link>
+                <span style={{ color: '#3D3D7A', fontSize: '12px', margin: '0 10px' }}>·</span>
+                <Link
+                  to="/about"
+                  style={{ color: '#5C5C9E', fontSize: '12px', textDecoration: 'none' }}
+                >
+                  About
+                </Link>
               </div>
             </motion.div>
           </>
@@ -715,6 +722,13 @@ function Lobby() {
                 style={{ color: '#5C5C9E', fontSize: '12px', textDecoration: 'none' }}
               >
                 View Leaderboard
+              </Link>
+              <span style={{ color: '#3D3D7A', fontSize: '12px', margin: '0 10px' }}>·</span>
+              <Link
+                to="/about"
+                style={{ color: '#5C5C9E', fontSize: '12px', textDecoration: 'none' }}
+              >
+                About
               </Link>
             </div>
           </div>
