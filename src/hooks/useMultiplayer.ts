@@ -152,6 +152,7 @@ function roomDefaults() {
     jackpotSignature: null,
     jackpotError: null,
     practice: false,
+    shareResult: null as ShareResult | null,
   };
 }
 
@@ -382,6 +383,7 @@ export function useMultiplayer({ resumeSession = null }: Options = {}) {
                 jackpotAmountOren: message.jackpotAmountOren ?? prev.jackpotAmountOren,
                 practice: (message as { practice?: boolean }).practice === true,
                 phase: 'lobby',
+                shareResult: null,
               };
             case 'player_joined':
             case 'player_left':
@@ -401,7 +403,7 @@ export function useMultiplayer({ resumeSession = null }: Options = {}) {
               };
             }
             case 'cards_dealt':
-              return { ...prev, cards: message.cards, phase: 'playing', currentBall: null, drawnBalls: [] };
+              return { ...prev, cards: message.cards, phase: 'playing', currentBall: null, drawnBalls: [], shareResult: null };
             case 'ball_drawn':
               return { ...prev, currentBall: message.ball, currentLetter: message.letter, drawnBalls: [...prev.drawnBalls, message.ball] };
             case 'bingo':
@@ -452,13 +454,35 @@ export function useMultiplayer({ resumeSession = null }: Options = {}) {
                 roomCode: null, playerId: null, hostId: null, players: [], phase: 'idle', cards: [],
                 currentBall: null, currentLetter: null, drawnBalls: [],
                 winningPlayerId: null, winningPlayerName: null, bonusWinnerId: null,
-                myBonusCardIndexes: [], bonusWinnerName: null, cardIndex: null,
+                myBonusCardIndexes: [], bonusWinnerName: null, cardIndex: null, shareResult: null,
                 error: message.reason === 'wallet_timeout'
                   ? "You were removed for not connecting a wallet in time."
                   : message.reason === 'fee_timeout'
                   ? "You were removed for not paying the entry fee in time."
                   : "You were removed from the room by the host.",
               };
+            case 'share_result':
+              return {
+                ...prev,
+                shareResult: {
+                  resultId: message.resultId,
+                  outcome: message.outcome === 'win' ? 'win' : 'loss',
+                  amountOren: Number(message.amountOren) || 0,
+                  noxBonus: Number(message.noxBonus) || 0,
+                  jackpotOren: prev.shareResult && prev.shareResult.resultId === message.resultId ? prev.shareResult.jackpotOren : 0,
+                  nameSaved: false,
+                },
+              };
+            case 'share_result_jackpot': {
+              const current = prev.shareResult;
+              if (!current || current.resultId !== message.resultId) return prev;
+              return { ...prev, shareResult: { ...current, jackpotOren: Number(message.jackpotOren) || 0 } };
+            }
+            case 'share_name_saved': {
+              const current = prev.shareResult;
+              if (!current || current.resultId !== message.resultId) return prev;
+              return { ...prev, shareResult: { ...current, nameSaved: true } };
+            }
             case 'wallet_challenge':
               return { ...prev, walletChallenge: message.message };
             case 'error':
@@ -549,5 +573,15 @@ export function useMultiplayer({ resumeSession = null }: Options = {}) {
       resumeFailed: null,
     }));
   }, [send, setActiveSession]);
-  return { ...state, createRoom, joinRoom, setWallet, submitEntryFee, removePlayer, startGame, leaveRoom };
+  // Sent once, before the first share. Marked saved right away so a
+  // second share button press doesn't send it again.
+  const setShareName = useCallback((resultId: string, displayName: string, source: 'farcaster' | 'typed') => {
+    setState(prev => {
+      const current = prev.shareResult;
+      if (!current || current.resultId !== resultId) return prev;
+      return { ...prev, shareResult: { ...current, nameSaved: true } };
+    });
+    send({ type: 'set_share_name', resultId, displayName, source });
+  }, [send]);
+  return { ...state, createRoom, joinRoom, setWallet, submitEntryFee, removePlayer, startGame, leaveRoom, setShareName };
 }
