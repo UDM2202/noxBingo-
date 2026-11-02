@@ -39,7 +39,7 @@ interface VictoryOverlayProps {
   shareResult?: ShareResult | null;
   onSetShareName?: (resultId: string, displayName: string, source: 'farcaster' | 'typed') => void;
 }
-function VictoryOverlay({ winningCardIndex, bonusCardIndexes, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount, jackpotWon, jackpotAmount, jackpotSignature, jackpotError }: VictoryOverlayProps) {
+function VictoryOverlay({ winningCardIndex, bonusCardIndexes, roomCode, cards, drawnBalls, onPlayAgain, onBackToLobby, isMultiplayerWinner, isMultiplayerLoser, winnerName, playerName, payoutSignature, payoutAmount, payoutError, noxBonusAmount, jackpotWon, jackpotAmount, jackpotSignature, jackpotError, shareResult, onSetShareName }: VictoryOverlayProps) {
   const drawnNumbers = new Set(drawnBalls);
   const [isNewCodeRevealing, setIsNewCodeRevealing] = useState(false);
   const [revealedCode, setRevealedCode] = useState('');
@@ -285,6 +285,12 @@ function VictoryOverlay({ winningCardIndex, bonusCardIndexes, roomCode, cards, d
                 Sending your jackpot…
               </p>
             )}
+          </motion.div>
+        )}
+
+        {shareResult && onSetShareName && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }}>
+            <SharePanel result={shareResult} onSetShareName={onSetShareName} />
           </motion.div>
         )}
 
