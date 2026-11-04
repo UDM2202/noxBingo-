@@ -1075,7 +1075,9 @@ function GameRoom() {
                 />
               </div>
               {drawnBalls.length > 0 && (
-                <div style={{ marginBottom: '10px' }}>
+                // Full width, so the sequence scrolls inside its own row
+                // instead of stretching the page sideways on phones.
+                <div style={{ marginBottom: '10px', width: '100%', display: 'flex', justifyContent: 'center' }}>
                   <DrawnSequence balls={drawnBalls} />
                 </div>
               )}
