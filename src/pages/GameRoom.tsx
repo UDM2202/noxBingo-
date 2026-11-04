@@ -14,6 +14,7 @@ import VictoryOverlay from '../components/VictoryOverlay';
 import CountdownOverlay from '../components/CountdownOverlay';
 import AudioSettings from '../components/AudioSettings';
 import { useAudio } from '../hooks/useAudio';
+import { useCardCellSize } from '../hooks/useCardCellSize';
 import { useAuth } from '../hooks/useAuth';
 import { useSolanaContract, getSolUsdPrice } from '../hooks/useSolanaContract';
 import { bundleOrenPrice, bundleSolPrice } from '../utils/cardBundles';
@@ -320,6 +321,8 @@ function GameRoom() {
 
   const phase = (isMultiplayer ? multi.phase : soloState.phase) ;
   const cards = isMultiplayer ? multi.cards : soloState.cards;
+  // Sizes the bingo cells so the cards fit the screen (see the hook).
+  const cardRow = useCardCellSize(cards.length);
   const currentBall = isMultiplayer
     ? multi.currentBall
     : soloState.currentDrawIndex >= 0
@@ -1079,6 +1082,7 @@ function GameRoom() {
             </motion.div>
 
             <motion.div
+              ref={cardRow.ref}
               className="flex justify-center gap-3 px-1 flex-wrap w-full"
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1106,6 +1110,7 @@ function GameRoom() {
                       isWinning={isWinner}
                       victoryPhase={victoryPhase}
                       onCellClick={() => {}}
+                      cellSize={cardRow.cell}
                     />
                   </motion.div>
                 );

@@ -5,14 +5,10 @@ import NoxSeal from './NoxSeal';
 
 const COLUMN_HEADERS = ['B', 'I', 'N', 'G', 'O'] as const;
 
-// The grid is laid out on a fixed 44px cell + 6px gap, so the energy
-// line drawn behind near-complete rows/columns can be positioned exactly.
-const CELL = 44;
-const GAP = 6;
-const PITCH = CELL + GAP;
-const GRID_SIZE = CELL * 5 + GAP * 4;
-const center = (i: number) => i * PITCH + CELL / 2;
-const GRID_COLUMNS = `repeat(5, ${CELL}px)`;
+// The grid is laid out on a fixed cell + gap (44px + 6px by default,
+// scaled together by `cellSize`), so the energy line drawn behind
+// near-complete rows/columns can be positioned exactly.
+const DEFAULT_CELL = 44;
 
 // Spark directions for the burst when a number is called.
 const SPARK_ANGLES = [0, 60, 120, 180, 240, 300];
@@ -39,6 +35,8 @@ interface HoloCardProps {
   isWinning: boolean;
   victoryPhase: 'winning-cell' | 'card-scale' | 'caller-freeze' | 'overlay' | null;
   onCellClick: (row: number, col: number) => void;
+  // Cell size in px; everything else on the card scales with it.
+  cellSize?: number;
 }
 
 type Cell = BingoCard['grid'][number][number];
@@ -47,8 +45,15 @@ interface HotLine {
   index: number;
 }
 
-function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victoryPhase, onCellClick }: HoloCardProps) {
+function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victoryPhase, onCellClick, cellSize = DEFAULT_CELL }: HoloCardProps) {
   const reduce = useReducedMotion();
+  const CELL = cellSize;
+  const scale = CELL / DEFAULT_CELL;
+  const GAP = Math.round(6 * scale);
+  const PITCH = CELL + GAP;
+  const GRID_SIZE = CELL * 5 + GAP * 4;
+  const center = (i: number) => i * PITCH + CELL / 2;
+  const GRID_COLUMNS = `repeat(5, ${CELL}px)`;
   const cardLabel = 'Card ' + (cardIndex + 1);
 
   // cell.marked comes from the initial cards_dealt payload and is never
@@ -138,8 +143,9 @@ function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victo
         {COLUMN_HEADERS.map((header) => (
           <div
             key={header}
+            style={{ fontSize: Math.round(14 * scale) }}
             className={`
-              text-sm font-bold tracking-wider
+              font-bold tracking-wider
               ${isWinning && victoryPhase === 'winning-cell'
                 ? 'text-gold'
                 : 'text-neon-primary/70'
@@ -237,7 +243,7 @@ function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victo
                   }
                   className={`
                     relative flex items-center justify-center
-                    rounded-lg text-sm md:text-base font-mono font-bold
+                    rounded-lg font-mono font-bold
                     transition-colors duration-200 box-border
                     ${isFreeSpace || isMarked
                       ? 'cursor-default'
@@ -247,6 +253,7 @@ function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victo
                   style={{
                     width: CELL + 'px',
                     height: CELL + 'px',
+                    fontSize: Math.round(15 * scale),
                     padding: 0,
                     margin: 0,
                     ...litStyle,
@@ -288,14 +295,15 @@ function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victo
                       animate={{ scale: 1, rotate: 0, opacity: 1 }}
                       transition={{ type: 'spring', stiffness: 380, damping: 16 }}
                     >
-                      <NoxSeal size={40} plain={isNoxCell} dim={isFreeSpace} />
+                      <NoxSeal size={Math.round(40 * scale)} plain={isNoxCell} dim={isFreeSpace} />
                     </motion.span>
                   )}
 
                   {/* Cell content */}
                   {isFreeSpace ? (
                     <motion.span
-                      className="relative z-10 text-gold text-xs font-bold tracking-tight"
+                      className="relative z-10 text-gold font-bold tracking-tight"
+                      style={{ fontSize: Math.round(12 * scale) }}
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={{ type: 'spring', stiffness: 400, damping: 15 }}
@@ -389,8 +397,8 @@ function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victo
                           style={{ background: '#FFD700', boxShadow: '0 0 6px rgba(255,215,0,0.9)' }}
                           initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
                           animate={{
-                            x: Math.cos((angle * Math.PI) / 180) * 28,
-                            y: Math.sin((angle * Math.PI) / 180) * 28,
+                            x: Math.cos((angle * Math.PI) / 180) * 28 * scale,
+                            y: Math.sin((angle * Math.PI) / 180) * 28 * scale,
                             opacity: 0,
                             scale: 0.3,
                           }}
