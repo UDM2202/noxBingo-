@@ -18,11 +18,13 @@ function QuantumCaller({ currentBall, isDrawing, isFrozen, winningCardIndex }: Q
   const isWinner = isFrozen && winningCardIndex !== null;
 
   return (
-    <div className="relative flex flex-col items-center pt-4">
-      <div className="relative flex items-center justify-center">
+    <div className="relative flex flex-col items-center pt-8">
+      {/* Sized to the outer glow ring so it stays centred on the main
+          circle and inside the layout (not clipped above, not over the label). */}
+      <div className="relative flex items-center justify-center w-36 h-36 md:w-48 md:h-48">
       {/* Outer glow ring */}
       <motion.div
-        className="absolute w-36 h-36 md:w-48 md:h-48 rounded-full"
+        className="absolute inset-0 rounded-full"
         animate={{
           boxShadow: isWinner
             ? [
@@ -103,19 +105,19 @@ function QuantumCaller({ currentBall, isDrawing, isFrozen, winningCardIndex }: Q
             ease: 'linear',
           } : { duration: 0.3 }}
         >
-          {/* Tick marks around the edge */}
+          {/* Tick marks around the edge: each one sits at the top of a
+              full-size layer rotated about the circle's centre. */}
           {Array.from({ length: 24 }).map((_, i) => (
             <div
               key={i}
-              className="absolute w-px bg-neon-primary/30"
-              style={{
-                height: '8px',
-                left: '50%',
-                top: '4px',
-                transform: `rotate(${i * 15}deg)`,
-                transformOrigin: 'bottom center',
-              }}
-            />
+              className="absolute inset-0"
+              style={{ transform: `rotate(${i * 15}deg)` }}
+            >
+              <div
+                className="absolute w-px bg-neon-primary/30 left-1/2 -translate-x-1/2"
+                style={{ height: '8px', top: '4px' }}
+              />
+            </div>
           ))}
         </motion.div>
 
