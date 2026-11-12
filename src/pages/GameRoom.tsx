@@ -323,6 +323,33 @@ function GameRoom() {
   const cards = isMultiplayer ? multi.cards : soloState.cards;
   // Sizes the bingo cells so the cards fit the screen (see the hook).
   const cardRow = useCardCellSize(cards.length);
+
+  // Daubing: 'auto' marks every called number; 'manual' lets the player
+  // tap called numbers themselves. Display only: the server still spots
+  // the win either way. The choice is remembered on this device.
+  const [daubMode, setDaubMode] = useState<'auto' | 'manual'>(() => {
+    try {
+      return localStorage.getItem('noxbingo-daub-mode') === 'manual' ? 'manual' : 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  // Cells the player has tapped, per card id, as "row-col".
+  const [manualMarks, setManualMarks] = useState<Record<string, Set<string>>>({});
+  const cardIdsKey = cards.map(c => c.id).join(',');
+  useEffect(() => {
+    setManualMarks({});
+  }, [cardIdsKey]);
+
+  function toggleDaubMode() {
+    const next = daubMode === 'auto' ? 'manual' : 'auto';
+    setDaubMode(next);
+    try {
+      localStorage.setItem('noxbingo-daub-mode', next);
+    } catch {
+      /* storage unavailable: the choice just isn't remembered */
+    }
+  }
   const currentBall = isMultiplayer
     ? multi.currentBall
     : soloState.currentDrawIndex >= 0
@@ -1083,6 +1110,32 @@ function GameRoom() {
               )}
             </motion.div>
 
+            <div className="flex flex-col items-center gap-1" style={{ marginBottom: '10px' }}>
+              <button
+                onClick={toggleDaubMode}
+                aria-pressed={daubMode === 'manual'}
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: '999px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  border: daubMode === 'manual' ? '1px solid rgba(255,215,0,0.5)' : '1px solid rgba(0,229,255,0.4)',
+                  background: daubMode === 'manual' ? 'rgba(255,215,0,0.08)' : 'rgba(0,229,255,0.08)',
+                  color: daubMode === 'manual' ? '#FFD700' : '#00E5FF',
+                  cursor: 'pointer',
+                }}
+              >
+                Daub: {daubMode === 'manual' ? 'Manual' : 'Auto'}
+              </button>
+              {daubMode === 'manual' && phase === 'playing' && (
+                <p style={{ color: '#8B8BD4', fontSize: '12px', textAlign: 'center' }}>
+                  Tap called numbers to mark them. Wins are still spotted automatically.
+                </p>
+              )}
+            </div>
+
             <motion.div
               ref={cardRow.ref}
               className="flex justify-center gap-3 px-1 flex-wrap w-full"
@@ -1111,8 +1164,27 @@ function GameRoom() {
                       currentBall={currentBall}
                       isWinning={isWinner}
                       victoryPhase={victoryPhase}
-                      onCellClick={() => {}}
+                      onCellClick={(row, col) => {
+                        if (daubMode !== 'manual' || phase !== 'playing') return;
+                        const value = card.grid[row][col].value;
+                        if (typeof value !== 'number' || !drawnBalls.includes(value)) return;
+                        const key = row + '-' + col;
+                        if (manualMarks[card.id]?.has(key)) return;
+                        setManualMarks(prev => ({
+                          ...prev,
+                          [card.id]: new Set(prev[card.id]).add(key),
+                        }));
+                        play('daub');
+                      }}
                       cellSize={cardRow.cell}
+                      /* Once the game ends every called number is shown,
+                         so the winning line lights up even if a number
+                         was missed. */
+                      manualMarks={
+                        daubMode === 'manual' && phase === 'playing'
+                          ? manualMarks[card.id] ?? new Set<string>()
+                          : undefined
+                      }
                     />
                   </motion.div>
                 );
