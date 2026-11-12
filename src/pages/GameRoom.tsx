@@ -28,6 +28,33 @@ import { loadPendingPayment, savePendingPayment, clearPendingPayment, type Pendi
 import { loadSession, markResultSaved } from '../utils/gameSession';
 import { useWalletBalances, formatBalance } from '../hooks/useWalletBalances';
 
+// Manual daub marks for the game in progress. One entry, replaced by
+// the next game, so nothing builds up.
+const DAUB_MARKS_KEY = 'noxbingo-daub-marks';
+
+function loadManualMarks(gameKey: string): Record<string, Set<string>> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DAUB_MARKS_KEY) || 'null');
+    if (!saved || saved.game !== gameKey || typeof saved.marks !== 'object') return {};
+    const marks: Record<string, Set<string>> = {};
+    for (const [cardId, cells] of Object.entries(saved.marks)) {
+      if (Array.isArray(cells)) marks[cardId] = new Set(cells.filter((c): c is string => typeof c === 'string'));
+    }
+    return marks;
+  } catch {
+    return {};
+  }
+}
+
+function saveManualMarks(gameKey: string, marks: Record<string, Set<string>>) {
+  try {
+    const plain = Object.fromEntries(Object.entries(marks).map(([id, cells]) => [id, [...cells]]));
+    localStorage.setItem(DAUB_MARKS_KEY, JSON.stringify({ game: gameKey, marks: plain }));
+  } catch {
+    /* storage unavailable: marks just won't survive a reload */
+  }
+}
+
 function GameRoom() {
   const { roomCode } = useParams<{ roomCode: string }>();
   const [searchParams] = useSearchParams();
@@ -334,12 +361,14 @@ function GameRoom() {
       return 'auto';
     }
   });
-  // Cells the player has tapped, per card id, as "row-col".
+  // Cells the player has tapped, per card id, as "row-col". Saved for
+  // the current game only (room + card ids), so a reload or reconnect
+  // mid-game keeps them and a new game starts clean.
   const [manualMarks, setManualMarks] = useState<Record<string, Set<string>>>({});
-  const cardIdsKey = cards.map(c => c.id).join(',');
+  const marksGameKey = (multi.roomCode ?? '') + '|' + cards.map(c => c.id).join(',');
   useEffect(() => {
-    setManualMarks({});
-  }, [cardIdsKey]);
+    setManualMarks(loadManualMarks(marksGameKey));
+  }, [marksGameKey]);
 
   function toggleDaubMode() {
     const next = daubMode === 'auto' ? 'manual' : 'auto';
@@ -1170,10 +1199,9 @@ function GameRoom() {
                         if (typeof value !== 'number' || !drawnBalls.includes(value)) return;
                         const key = row + '-' + col;
                         if (manualMarks[card.id]?.has(key)) return;
-                        setManualMarks(prev => ({
-                          ...prev,
-                          [card.id]: new Set(prev[card.id]).add(key),
-                        }));
+                        const next = { ...manualMarks, [card.id]: new Set(manualMarks[card.id]).add(key) };
+                        setManualMarks(next);
+                        saveManualMarks(marksGameKey, next);
                         play('daub');
                       }}
                       cellSize={cardRow.cell}
