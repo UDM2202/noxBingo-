@@ -37,6 +37,10 @@ interface HoloCardProps {
   onCellClick: (row: number, col: number) => void;
   // Cell size in px; everything else on the card scales with it.
   cellSize?: number;
+  // Manual daubing: the cells ("row-col") the player has tapped. When
+  // given, only these (plus the free space) show as marked; when left
+  // out, every called number is marked automatically.
+  manualMarks?: Set<string>;
 }
 
 type Cell = BingoCard['grid'][number][number];
@@ -45,7 +49,7 @@ interface HotLine {
   index: number;
 }
 
-function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victoryPhase, onCellClick, cellSize = DEFAULT_CELL }: HoloCardProps) {
+function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victoryPhase, onCellClick, cellSize = DEFAULT_CELL, manualMarks }: HoloCardProps) {
   const reduce = useReducedMotion();
   const CELL = cellSize;
   const scale = CELL / DEFAULT_CELL;
@@ -61,8 +65,10 @@ function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victo
   // sent on each draw) — so it can't be trusted mid-game. drawnNumbers,
   // on the other hand, genuinely accumulates every ball as it's called,
   // so deriving "marked" from that is what actually stays correct.
-  const cellMarked = (cell: Cell): boolean =>
-    cell.isFreeSpace || cell.marked || (typeof cell.value === 'number' && drawnNumbers.has(cell.value));
+  const cellMarked = (cell: Cell, row: number, col: number): boolean =>
+    manualMarks
+      ? cell.isFreeSpace || manualMarks.has(row + '-' + col)
+      : cell.isFreeSpace || cell.marked || (typeof cell.value === 'number' && drawnNumbers.has(cell.value));
 
   // Rows / columns that are exactly one number from winning. These get a
   // flowing gold line through them and a pulsing gold border on the single
@@ -76,9 +82,9 @@ function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victo
       let colMarked = 0;
       let colMissing = -1;
       for (let j = 0; j < 5; j++) {
-        if (cellMarked(card.grid[i][j])) rowMarked++;
+        if (cellMarked(card.grid[i][j], i, j)) rowMarked++;
         else rowMissing = j;
-        if (cellMarked(card.grid[j][i])) colMarked++;
+        if (cellMarked(card.grid[j][i], j, i)) colMarked++;
         else colMissing = j;
       }
       if (rowMarked === 4) {
@@ -202,7 +208,7 @@ function HoloCard({ card, cardIndex, drawnNumbers, currentBall, isWinning, victo
           {card.grid.map((row, rowIndex) =>
             row.map((cell, colIndex) => {
               const isFreeSpace = cell.isFreeSpace;
-              const isMarked = cellMarked(cell);
+              const isMarked = cellMarked(cell, rowIndex, colIndex);
               const isWinningCell = isWinning && victoryPhase === 'winning-cell' && isMarked;
               const isJustCalled = currentBall !== null && cell.value === currentBall;
               const isNoxCell = card.noxCell?.row === rowIndex && card.noxCell?.col === colIndex;
